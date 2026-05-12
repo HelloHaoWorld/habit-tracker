@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Habit Tracker" />
+  <title>Habit Tracker</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green: #1D9E75;
+      --green-light: #E1F5EE;
+      --green-dark: #0F6E56;
+      --red: #D85A30;
+      --red-light: #FAECE7;
+      --gray-50: #F8F8F6;
+      --gray-100: #EFEFED;
+      --gray-200: #D3D1C7;
+      --gray-400: #888780;
+      --gray-600: #5F5E5A;
+      --gray-900: #2C2C2A;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-900);
+      min-height: 100dvh;
+      padding-bottom: calc(80px + var(--safe-bottom));
+    }
+
+    /* Header */
+    .header {
+      background: white;
+      border-bottom: 0.5px solid var(--gray-200);
+      padding: calc(var(--safe-top) + 16px) 20px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header h1 { font-size: 18px; font-weight: 600; }
+    .header-sub { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+
+    /* Bottom nav */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0; right: 0;
+      background: white;
+      border-top: 0.5px solid var(--gray-200);
+      display: flex;
+      padding-bottom: var(--safe-bottom);
+      z-index: 10;
+    }
+    .nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 10px 0;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 10px;
+      color: var(--gray-400);
+      transition: color 0.15s;
+    }
+    .nav-btn.active { color: var(--green); }
+    .nav-btn svg { width: 22px; height: 22px; stroke-width: 1.6; }
+
+    /* Pages */
+    .page { display: none; padding: 20px; }
+    .page.active { display: block; }
+
+    /* Cards */
+    .card {
+      background: white;
+      border-radius: var(--radius-lg);
+      border: 0.5px solid var(--gray-200);
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+    }
+
+    /* Goal card on Today page */
+    .goal-card {
+      background: white;
+      border-radius: var(--radius-lg);
+      border: 0.5px solid var(--gray-200);
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+    .goal-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .goal-name { font-size: 16px; font-weight: 600; }
+    .goal-desc { font-size: 13px; color: var(--gray-400); margin-top: 2px; }
+    .streak-badge {
+      background: var(--green-light);
+      color: var(--green-dark);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+
+    .log-buttons { display: flex; gap: 10px; }
+    .log-btn {
+      flex: 1;
+      padding: 13px;
+      border-radius: var(--radius-md);
+      border: 0.5px solid;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .log-btn:active { transform: scale(0.97); }
+    .log-btn.success {
+      background: var(--green-light);
+      color: var(--green-dark);
+      border-color: var(--green);
+    }
+    .log-btn.fail {
+      background: var(--red-light);
+      color: var(--red);
+      border-color: var(--red);
+    }
+    .log-btn.selected-yes { background: var(--green); color: white; border-color: var(--green); }
+    .log-btn.selected-no { background: var(--red); color: white; border-color: var(--red); }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .stat-card {
+      background: white;
+      border-radius: var(--radius-md);
+      border: 0.5px solid var(--gray-200);
+      padding: 14px;
+      text-align: center;
+    }
+    .stat-label { font-size: 11px; color: var(--gray-400); margin-bottom: 4px; }
+    .stat-value { font-size: 26px; font-weight: 600; color: var(--gray-900); line-height: 1; }
+    .stat-unit { font-size: 11px; color: var(--gray-400); margin-top: 4px; }
+
+    /* Heatmap */
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+    .heatmap-day-label {
+      font-size: 10px;
+      color: var(--gray-400);
+      text-align: center;
+      padding-bottom: 4px;
+    }
+    .heatmap-cell {
+      aspect-ratio: 1;
+      border-radius: 5px;
+      background: var(--gray-100);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--gray-400);
+      position: relative;
+    }
+    .heatmap-cell.hit { background: var(--green); color: white; }
+    .heatmap-cell.miss { background: var(--red); color: white; }
+    .heatmap-cell.today { box-shadow: 0 0 0 2px var(--green); }
+    .heatmap-cell.empty { background: transparent; }
+
+    .legend {
+      display: flex;
+      gap: 14px;
+      margin-top: 8px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--gray-400);
+    }
+    .legend-dot {
+      width: 10px; height: 10px;
+      border-radius: 3px;
+    }
+
+    /* Goals management page */
+    .goals-list { display: flex; flex-direction: column; gap: 12px; }
+    .goal-item {
+      background: white;
+      border-radius: var(--radius-lg);
+      border: 0.5px solid var(--gray-200);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .goal-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      background: var(--green-light);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .goal-info { flex: 1; min-width: 0; }
+    .goal-item-name { font-size: 15px; font-weight: 500; }
+    .goal-item-desc { font-size: 12px; color: var(--gray-400); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .add-goal-btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: var(--radius-lg);
+      border: 1.5px dashed var(--gray-200);
+      background: none;
+      font-size: 14px;
+      color: var(--gray-400);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 4px;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .add-goal-btn:hover { border-color: var(--green); color: var(--green); }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 100;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: white;
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      padding: 20px 20px calc(20px + var(--safe-bottom));
+      width: 100%;
+      max-width: 480px;
+    }
+    .modal-title { font-size: 17px; font-weight: 600; margin-bottom: 16px; }
+    .form-group { margin-bottom: 14px; }
+    .form-label { font-size: 12px; font-weight: 500; color: var(--gray-600); margin-bottom: 6px; display: block; }
+    .form-input {
+      width: 100%;
+      padding: 11px 14px;
+      border-radius: var(--radius-sm);
+      border: 0.5px solid var(--gray-200);
+      font-size: 15px;
+      background: var(--gray-50);
+      color: var(--gray-900);
+      outline: none;
+      font-family: inherit;
+    }
+    .form-input:focus { border-color: var(--green); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+    .btn-primary {
+      flex: 1; padding: 13px;
+      background: var(--green);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-secondary {
+      flex: 1; padding: 13px;
+      background: var(--gray-100);
+      color: var(--gray-600);
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    /* Chart container */
+    .chart-wrap { position: relative; height: 160px; }
+
+    /* Empty state */
+    .empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--gray-400);
+      font-size: 14px;
+    }
+    .empty-icon { font-size: 36px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div>
+    <h1 id="header-title">Today</h1>
+    <div class="header-sub" id="header-date"></div>
+  </div>
+</div>
+
+<!-- TODAY PAGE -->
+<div class="page active" id="page-today">
+  <div id="goals-today-list"></div>
+</div>
+
+<!-- STATS PAGE -->
+<div class="page" id="page-stats">
+  <div id="stats-goal-select-wrap" style="margin-bottom:14px;">
+    <select id="stats-goal-select" class="form-input" onchange="renderStats()"></select>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Current streak</div>
+      <div class="stat-value" id="s-streak">—</div>
+      <div class="stat-unit">days in a row</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Success rate</div>
+      <div class="stat-value" id="s-rate">—</div>
+      <div class="stat-unit">all time</div>
+    </div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Best streak</div>
+      <div class="stat-value" id="s-best">—</div>
+      <div class="stat-unit">days</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total logged</div>
+      <div class="stat-value" id="s-total">—</div>
+      <div class="stat-unit">days</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">This month</div>
+    <div class="heatmap-grid" id="stats-heatmap-labels"></div>
+    <div class="heatmap-grid" id="stats-heatmap"></div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>On time</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Missed</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--gray-100); border:0.5px solid var(--gray-200)"></div>Not logged</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Last 8 weeks</div>
+    <div class="chart-wrap"><canvas id="bar-chart"></canvas></div>
+  </div>
+</div>
+
+<!-- GOALS PAGE -->
+<div class="page" id="page-goals">
+  <div class="goals-list" id="goals-list"></div>
+  <button class="add-goal-btn" onclick="openAddGoal()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Add new goal
+  </button>
+</div>
+
+<!-- Bottom nav -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" onclick="switchPage('today', this)" aria-label="Today">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    Today
+  </button>
+  <button class="nav-btn" onclick="switchPage('stats', this)" aria-label="Stats">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    Stats
+  </button>
+  <button class="nav-btn" onclick="switchPage('goals', this)" aria-label="Goals">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+    Goals
+  </button>
+</nav>
+
+<!-- Add Goal Modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-title">New goal</div>
+    <div class="form-group">
+      <label class="form-label" for="input-name">Goal name</label>
+      <input class="form-input" id="input-name" type="text" placeholder="e.g. School drop-off" maxlength="40" />
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="input-desc">Description</label>
+      <input class="form-input" id="input-desc" type="text" placeholder="e.g. Ethan at school by 8:45 AM" maxlength="60" />
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="input-emoji">Icon (emoji)</label>
+      <input class="form-input" id="input-emoji" type="text" placeholder="🎯" maxlength="4" style="font-size:22px; text-align:center;" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModalDirect()">Cancel</button>
+      <button class="btn-primary" onclick="saveGoal()">Add goal</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
