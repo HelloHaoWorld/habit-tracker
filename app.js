@@ -13,6 +13,7 @@ let goals = [];
 let logs = {};       // { goalId: { 'YYYY-MM-DD': { success, logged_by } } }
 let chartInstance = null;
 let currentPage = 'today';
+let selectedGoalId = null;
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -205,12 +206,16 @@ function renderToday() {
 function renderStatsPage() {
   const select = document.getElementById('stats-goal-select');
   select.innerHTML = goals.map(g => `<option value="${g.id}">${g.emoji} ${g.name}</option>`).join('');
+  if (selectedGoalId && goals.find(g => g.id === selectedGoalId)) {
+    select.value = selectedGoalId;
+  }
   renderStats();
 }
 
 function renderStats() {
   const goalId = document.getElementById('stats-goal-select').value;
   if (!goalId) return;
+  selectedGoalId = goalId;
   document.getElementById('s-streak').textContent = getStreak(goalId);
   const rate = getRate(goalId);
   document.getElementById('s-rate').textContent = rate !== null ? rate + '%' : '—';
