@@ -19,7 +19,7 @@ let currentPage = 'today';
 async function signInWithGoogle() {
   await db.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.origin }
+    options: { redirectTo: 'https://habit-tracker-kappa-one-70.vercel.app' }
   });
 }
 
