@@ -123,6 +123,16 @@
     @keyframes spin { to { transform:rotate(360deg); } }
 
     .logged-by { font-size:11px; color:var(--gray-400); text-align:center; margin-top:10px; }
+
+    /* Insights */
+    #insights-content p { margin-bottom:14px; font-size:15px; line-height:1.65; color:var(--gray-900); }
+    #insights-content p:last-child { margin-bottom:0; }
+    #insights-content strong { color:var(--gray-900); font-weight:600; }
+    .insights-meta { display:flex; align-items:center; justify-content:space-between; margin-top:8px; }
+    .insights-timestamp { font-size:11px; color:var(--gray-400); }
+    .refresh-btn { background:none; border:0.5px solid var(--gray-200); border-radius:20px; padding:5px 14px; font-size:12px; color:var(--gray-600); cursor:pointer; font-family:inherit; transition:border-color 0.15s,color 0.15s; }
+    .refresh-btn:hover { border-color:var(--green); color:var(--green); }
+    .insights-error { color:var(--red); font-size:14px; text-align:center; padding:20px 0; }
   </style>
 </head>
 <body>
@@ -189,6 +199,27 @@
     </button>
   </div>
 
+  <div class="page" id="page-insights">
+    <div id="insights-empty">
+      <div class="empty">
+        <div class="empty-icon">✨</div>
+        Get personalized insights on your habits powered by Claude AI.
+      </div>
+      <button class="btn-primary" style="width:100%;margin-top:4px;" onclick="generateInsights()">Analyze my habits</button>
+    </div>
+    <div id="insights-loading" style="display:none;">
+      <div class="spinner"></div>
+      <div style="text-align:center;color:var(--gray-400);font-size:13px;margin-top:8px;">Analyzing your habits…</div>
+    </div>
+    <div id="insights-result" style="display:none;">
+      <div class="card" id="insights-content"></div>
+      <div class="insights-meta">
+        <div class="insights-timestamp" id="insights-timestamp"></div>
+        <button class="refresh-btn" onclick="generateInsights()">↻ Refresh</button>
+      </div>
+    </div>
+  </div>
+
   <nav class="bottom-nav">
     <button class="nav-btn active" onclick="switchPage('today',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Today
@@ -198,6 +229,9 @@
     </button>
     <button class="nav-btn" onclick="switchPage('goals',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Goals
+    </button>
+    <button class="nav-btn" onclick="switchPage('insights',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Insights
     </button>
   </nav>
 </div>

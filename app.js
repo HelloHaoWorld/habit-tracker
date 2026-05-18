@@ -14,6 +14,7 @@ let logs = {};       // { goalId: { 'YYYY-MM-DD': { success, logged_by } } }
 let chartInstance = null;
 let currentPage = 'today';
 let selectedGoalId = null;
+let insightsCache = null; // { text: string, timestamp: Date }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -150,11 +151,12 @@ function switchPage(page, btn) {
   document.getElementById('page-' + page).classList.add('active');
   btn.classList.add('active');
   currentPage = page;
-  const titles = { today: 'Today', stats: 'Stats', goals: 'Goals' };
+  const titles = { today: 'Today', stats: 'Stats', goals: 'Goals', insights: 'Insights' };
   document.getElementById('header-title').textContent = titles[page];
   if (page === 'today') renderToday();
   if (page === 'stats') renderStatsPage();
   if (page === 'goals') renderGoalsPage();
+  if (page === 'insights') renderInsightsPage();
 }
 
 // ─── Today page ───────────────────────────────────────────────────────────────
@@ -355,6 +357,128 @@ async function saveGoal() {
   goals.push({ id, name, description, emoji });
   closeModalDirect();
   renderGoalsPage();
+}
+
+// ─── Insights page ────────────────────────────────────────────────────────────
+
+function renderInsightsPage() {
+  const empty = document.getElementById('insights-empty');
+  const loading = document.getElementById('insights-loading');
+  const result = document.getElementById('insights-result');
+  if (insightsCache) {
+    empty.style.display = 'none';
+    loading.style.display = 'none';
+    result.style.display = 'block';
+    document.getElementById('insights-content').innerHTML = renderMarkdown(insightsCache.text);
+    document.getElementById('insights-timestamp').textContent =
+      `Generated ${insightsCache.timestamp.toLocaleTimeString()}`;
+  } else {
+    empty.style.display = 'block';
+    loading.style.display = 'none';
+    result.style.display = 'none';
+  }
+}
+
+function prepareInsightsData() {
+  return goals.map(g => {
+    const gl = getGoalLogs(g.id);
+    const recent30Days = [];
+    for (let i = 0; i < 30; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = dateKey(d);
+      const entry = gl[key];
+      recent30Days.push({
+        date: key,
+        result: entry?.success === true ? 'hit' : entry?.success === false ? 'miss' : 'not logged'
+      });
+    }
+    return {
+      name: g.name,
+      emoji: g.emoji,
+      description: g.description || '',
+      streak: getStreak(g.id),
+      bestStreak: getBestStreak(g.id),
+      successRate: getRate(g.id),
+      totalLogged: getTotalLogged(g.id),
+      recent30Days
+    };
+  });
+}
+
+function renderMarkdown(text) {
+  return text
+    .split(/\n{2,}/)
+    .map(para => {
+      para = para.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      para = para.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      para = para.replace(/\n/g, '<br>');
+      return `<p>${para}</p>`;
+    })
+    .join('');
+}
+
+async function generateInsights() {
+  if (!goals.length) return;
+
+  document.getElementById('insights-empty').style.display = 'none';
+  document.getElementById('insights-loading').style.display = 'block';
+  document.getElementById('insights-result').style.display = 'none';
+
+  let fullText = '';
+
+  try {
+    const res = await fetch('/api/insights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ goals: prepareInsightsData() })
+    });
+
+    if (!res.ok) throw new Error('Request failed');
+
+    document.getElementById('insights-loading').style.display = 'none';
+    document.getElementById('insights-result').style.display = 'block';
+    const contentEl = document.getElementById('insights-content');
+    contentEl.innerHTML = '';
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+        if (data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.error) throw new Error(parsed.error);
+          if (parsed.text) {
+            fullText += parsed.text;
+            contentEl.innerHTML = fullText.replace(/\n/g, '<br>');
+          }
+        } catch (e) {
+          if (!(e instanceof SyntaxError)) throw e;
+        }
+      }
+    }
+
+    contentEl.innerHTML = renderMarkdown(fullText);
+    insightsCache = { text: fullText, timestamp: new Date() };
+    document.getElementById('insights-timestamp').textContent =
+      `Generated ${insightsCache.timestamp.toLocaleTimeString()}`;
+
+  } catch (err) {
+    document.getElementById('insights-loading').style.display = 'none';
+    document.getElementById('insights-result').style.display = 'block';
+    document.getElementById('insights-content').innerHTML =
+      `<div class="insights-error">Could not load insights. Please try again.</div>`;
+  }
 }
 
 // ─── Real-time sync ───────────────────────────────────────────────────────────
