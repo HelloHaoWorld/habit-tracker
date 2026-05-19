@@ -15,6 +15,7 @@ let chartInstance = null;
 let currentPage = 'today';
 let selectedGoalId = null;
 let insightsCache = null; // { text: string, timestamp: Date }
+let subscribed = false;
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -484,6 +485,8 @@ async function generateInsights() {
 // ─── Real-time sync ───────────────────────────────────────────────────────────
 
 function subscribeToLogs() {
+  if (subscribed) return;
+  subscribed = true;
   db.channel('logs-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'logs' }, payload => {
       const row = payload.new || payload.old;
