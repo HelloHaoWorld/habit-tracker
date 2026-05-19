@@ -72,8 +72,9 @@ export default async function handler(req) {
   });
 
   if (!anthropicRes.ok) {
+    const errBody = await anthropicRes.text();
     return new Response(
-      `data: ${JSON.stringify({ error: `AI error (${anthropicRes.status})` })}\ndata: [DONE]\n\n`,
+      `data: ${JSON.stringify({ error: `AI error (${anthropicRes.status}): ${errBody}` })}\ndata: [DONE]\n\n`,
       { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
     );
   }
