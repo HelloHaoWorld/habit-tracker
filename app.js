@@ -485,8 +485,7 @@ async function generateInsights() {
 // ─── Real-time sync ───────────────────────────────────────────────────────────
 
 function subscribeToLogs() {
-  if (subscribed) return;
-  subscribed = true;
+  if (db.getChannels().some(c => c.topic === 'realtime:logs-changes')) return;
   db.channel('logs-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'logs' }, payload => {
       const row = payload.new || payload.old;
@@ -497,7 +496,6 @@ function subscribeToLogs() {
         if (!logs[row.goal_id]) logs[row.goal_id] = {};
         logs[row.goal_id][row.date] = { success: row.success, logged_by: row.logged_by };
       }
-      // Refresh whichever page is open
       if (currentPage === 'today') renderToday();
       if (currentPage === 'stats') renderStats();
     })
