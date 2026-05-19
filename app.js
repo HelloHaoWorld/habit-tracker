@@ -47,17 +47,6 @@ function dateKey(date) {
 async function loadGoals() {
   const { data, error } = await db.from('goals').select('*').order('created_at');
   if (error) { console.error(error); return; }
-
-  // Seed default goal if none exist
-  if (!data.length) {
-    await db.from('goals').insert({
-      id: 'school-dropoff',
-      name: 'School drop-off',
-      description: 'Ethan at school by 8:45 AM',
-      emoji: '🏫'
-    });
-    return loadGoals();
-  }
   goals = data;
 }
 
@@ -82,7 +71,7 @@ async function log(goalId, value) {
   document.querySelectorAll('.log-btn').forEach(b => b.disabled = true);
 
   const { error } = await db.from('logs').upsert(
-    { goal_id: goalId, date, success: value, logged_by: name, updated_at: new Date().toISOString() },
+    { goal_id: goalId, date, success: value, logged_by: name, user_id: currentUser.id, updated_at: new Date().toISOString() },
     { onConflict: 'goal_id,date' }
   );
 
@@ -352,7 +341,7 @@ async function saveGoal() {
   if (!name) { document.getElementById('input-name').focus(); return; }
 
   const id = 'goal-' + Date.now();
-  const { error } = await db.from('goals').insert({ id, name, description, emoji });
+  const { error } = await db.from('goals').insert({ id, name, description, emoji, user_id: currentUser.id });
   if (error) { alert('Failed to save goal.'); return; }
 
   goals.push({ id, name, description, emoji });
