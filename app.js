@@ -478,7 +478,7 @@ async function generateInsights() {
     document.getElementById('insights-loading').style.display = 'none';
     document.getElementById('insights-result').style.display = 'block';
     document.getElementById('insights-content').innerHTML =
-      `<div class="insights-error">Could not load insights. Please try again.</div>`;
+      `<div class="insights-error">${err.message || 'Could not load insights. Please try again.'}</div>`;
   }
 }
 
