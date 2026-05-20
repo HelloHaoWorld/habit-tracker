@@ -946,7 +946,7 @@ async function saveRecipeWithAI() {
     closeMealModal();
     renderMealsPage();
   } else {
-    alert('Failed to save recipe');
+    alert('Failed to save recipe: ' + JSON.stringify(error));
     saveBtn.textContent = '✨ Generate & save';
     saveBtn.disabled = false;
   }
