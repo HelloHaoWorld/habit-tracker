@@ -803,6 +803,7 @@ function toggleStep(checkbox) {
 function renderRecipes(container) {
   const cards = recipes.map(r => `
     <div class="recipe-card">
+      ${r.photo_url ? `<img class="recipe-photo" src="${r.photo_url}" alt="${r.name}">` : ''}
       <div class="recipe-card-header">
         <div>
           <div class="recipe-card-name">${r.name}</div>
@@ -858,6 +859,13 @@ function openAddRecipe() {
         </div>
       </div>
       <div class="form-group">
+        <label class="form-label">Photo</label>
+        <div class="photo-upload-area" id="r-photo-preview" onclick="document.getElementById('r-photo-input').click()">
+          <div class="photo-upload-placeholder">📷 Tap to add photo</div>
+        </div>
+        <input type="file" id="r-photo-input" accept="image/*" style="display:none" onchange="previewPhoto(this)">
+      </div>
+      <div class="form-group">
         <label class="form-label">Describe the recipe — AI will generate prep steps</label>
         <textarea class="form-input" id="r-desc" rows="3" placeholder="e.g. Cook pasta, mix with pesto and cherry tomatoes, pack with fork"></textarea>
       </div>
@@ -868,6 +876,14 @@ function openAddRecipe() {
     </div>`;
   document.getElementById('modal-overlay').classList.add('open');
   setStars(5);
+}
+
+function previewPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  document.getElementById('r-photo-preview').innerHTML =
+    `<img src="${url}" style="width:100%;height:100%;object-fit:cover;">`;
 }
 
 function setStars(val) {
@@ -907,13 +923,26 @@ async function saveRecipeWithAI() {
 
   const id = 'recipe-' + Date.now();
   const ingredients = ingredientsRaw.split(',').map(s => s.trim()).filter(Boolean);
+
+  let photoUrl = null;
+  const photoFile = document.getElementById('r-photo-input').files[0];
+  if (photoFile) {
+    const ext = photoFile.name.split('.').pop() || 'jpg';
+    const { error: uploadError } = await db.storage.from('recipe-photos').upload(`${id}.${ext}`, photoFile);
+    if (!uploadError) {
+      const { data } = db.storage.from('recipe-photos').getPublicUrl(`${id}.${ext}`);
+      photoUrl = data.publicUrl;
+    }
+  }
+
   const { error } = await db.from('recipes').insert({
     id, name, ingredients, prep_steps: prepSteps,
-    prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags
+    prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags,
+    photo_url: photoUrl
   });
 
   if (!error) {
-    recipes.push({ id, name, ingredients, prep_steps: prepSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags });
+    recipes.push({ id, name, ingredients, prep_steps: prepSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, photo_url: photoUrl });
     closeMealModal();
     renderMealsPage();
   } else {
