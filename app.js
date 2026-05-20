@@ -815,6 +815,14 @@ function renderRecipes(container) {
       </div>
       <div>${(r.nutrition_tags||[]).map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}</div>
       <div style="margin-top:8px;font-size:13px;color:var(--gray-400)">${(r.ingredients||[]).join(', ')}</div>
+      ${(() => {
+        const nightSteps = (r.prep_steps||[]).filter(s => s.when === 'night_before');
+        if (!nightSteps.length) return '';
+        return `<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--gray-100)">
+          <div style="font-size:11px;font-weight:600;color:var(--gray-400);margin-bottom:6px;">🌙 PREP TONIGHT</div>
+          ${nightSteps.map(s => `<div style="font-size:13px;color:var(--gray-600);padding:2px 0">• ${s.text}</div>`).join('')}
+        </div>`;
+      })()}
     </div>`).join('');
 
   container.innerHTML = `
