@@ -23,7 +23,9 @@
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--gray-50); color: var(--gray-900); min-height: 100dvh; padding-bottom: calc(80px + var(--safe-bottom)); }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--gray-50); color: var(--gray-900); min-height: 100dvh; padding-bottom: calc(80px + var(--safe-bottom)); overflow-x: hidden; }
+    .page { max-width: 100%; }
+    canvas { max-width: 100%; }
 
     /* Login */
     #login-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100dvh; padding:40px 24px; text-align:center; }
