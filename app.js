@@ -225,6 +225,8 @@ function renderStats() {
   const goalId = document.getElementById('stats-goal-select').value;
   if (!goalId) return;
   selectedGoalId = goalId;
+  const goal = goals.find(g => g.id === goalId);
+  document.getElementById('header-title').textContent = goal ? `${goal.emoji} ${goal.name}` : 'Stats';
   document.getElementById('s-streak').textContent = getStreak(goalId);
   const rate = getRate(goalId);
   document.getElementById('s-rate').textContent = rate !== null ? rate + '%' : '—';
