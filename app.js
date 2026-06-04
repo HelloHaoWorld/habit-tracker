@@ -9,6 +9,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ─── State ────────────────────────────────────────────────────────────────────
 
 let currentUser = null;
+let userProfile = null;
 let goals = [];
 let logs = {};       // { goalId: { 'YYYY-MM-DD': { success, logged_by } } }
 let chartInstance = null;
@@ -58,6 +59,21 @@ async function loadLogs() {
   for (const row of data) {
     if (!logs[row.goal_id]) logs[row.goal_id] = {};
     logs[row.goal_id][row.date] = { success: row.success, logged_by: row.logged_by };
+  }
+}
+
+async function loadProfile() {
+  const { data, error } = await db.from('profiles').select('*').eq('user_id', currentUser.id).single();
+  if (error && error.code !== 'PGRST116') { console.error(error); return; }
+
+  if (data) {
+    userProfile = data;
+  } else {
+    const defaultName = currentUser?.user_metadata?.name || currentUser?.email?.split('@')[0] || '';
+    if (defaultName) {
+      const { data: created } = await db.from('profiles').insert({ user_id: currentUser.id, display_name: defaultName }).select().single();
+      userProfile = created;
+    }
   }
 }
 
@@ -328,11 +344,11 @@ function openAddGoal() {
 }
 
 function closeModal(event) {
-  if (event.target === document.getElementById('modal-overlay')) closeModalDirect();
+  if (event.target === document.getElementById('modal-overlay')) closeMealModal();
 }
 
 function closeModalDirect() {
-  document.getElementById('modal-overlay').classList.remove('open');
+  closeMealModal();
 }
 
 async function saveGoal() {
@@ -508,19 +524,19 @@ async function init() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
 
-  // Set avatar initials
-  const name = currentUser?.user_metadata?.name || currentUser?.email || '?';
-  document.getElementById('avatar-btn').textContent = name.charAt(0).toUpperCase();
-  document.getElementById('avatar-btn').title = `Signed in as ${name} · Tap to sign out`;
-
   // Set date
   document.getElementById('header-date').textContent = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric'
   });
 
   // Load data
+  await loadProfile();
   await loadGoals();
   await loadLogs();
+
+  // Set avatar display name
+  const displayName = userProfile?.display_name || currentUser?.user_metadata?.name || currentUser?.email || '?';
+  document.getElementById('avatar-btn').textContent = displayName;
   await loadRecipes();
   await loadPantryItems();
   await loadMealPlan();
@@ -738,6 +754,61 @@ async function saveMealPick(date) {
   if (!error) mealPlan[date] = { id, date, recipe_id: recipeId, pantry_item_ids: checkedPantry, confirmed: true };
   closeMealModal();
   renderMealsPage();
+}
+
+function openProfileMenu() {
+  const displayName = userProfile?.display_name || currentUser?.user_metadata?.name || 'Account';
+  const email = currentUser?.email || '';
+  const overlay = document.getElementById('modal-overlay');
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-title" style="text-align:center;">${displayName}</div>
+      <div style="text-align:center;color:var(--gray-400);font-size:13px;margin-bottom:20px;">${email}</div>
+      <button class="btn-primary" style="width:100%;margin-bottom:10px;" onclick="openEditProfile()">Edit name</button>
+      <button class="btn-secondary" style="width:100%;" onclick="signOutFromModal()">Sign out</button>
+    </div>`;
+  overlay.classList.add('open');
+}
+
+function openEditProfile() {
+  const currentName = userProfile?.display_name || currentUser?.user_metadata?.name || '';
+  const overlay = document.getElementById('modal-overlay');
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">Edit name</div>
+      <div class="form-group">
+        <label class="form-label">Display name</label>
+        <input class="form-input" id="profile-name-input" type="text" value="${currentName}" maxlength="40" placeholder="Your name"/>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="openProfileMenu()">Back</button>
+        <button class="btn-primary" onclick="saveProfile()">Save</button>
+      </div>
+    </div>`;
+  overlay.classList.add('open');
+  setTimeout(() => document.getElementById('profile-name-input')?.focus(), 50);
+}
+
+async function saveProfile() {
+  const name = document.getElementById('profile-name-input').value.trim();
+  if (!name) return;
+
+  const { error } = await db.from('profiles').upsert(
+    { user_id: currentUser.id, display_name: name },
+    { onConflict: 'user_id' }
+  );
+
+  if (error) { alert('Failed to save name. Please try again.'); return; }
+
+  userProfile = { ...userProfile, display_name: name };
+  document.getElementById('avatar-btn').textContent = name;
+  closeMealModal();
+}
+
+async function signOutFromModal() {
+  closeMealModal();
+  await db.auth.signOut();
+  location.reload();
 }
 
 function closeMealModal() {

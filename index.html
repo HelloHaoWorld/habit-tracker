@@ -42,7 +42,7 @@
     .header { background:white; border-bottom:0.5px solid var(--gray-200); padding:calc(var(--safe-top) + 16px) 20px 16px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10; }
     .header h1 { font-size:18px; font-weight:600; }
     .header-sub { font-size:12px; color:var(--gray-400); margin-top:2px; }
-    .avatar { width:32px; height:32px; border-radius:50%; background:var(--green-light); color:var(--green-dark); font-size:13px; font-weight:600; display:flex; align-items:center; justify-content:center; cursor:pointer; border:none; flex-shrink:0; }
+    .avatar { height:32px; padding:0 12px; border-radius:16px; background:var(--green-light); color:var(--green-dark); font-size:13px; font-weight:600; display:flex; align-items:center; justify-content:center; cursor:pointer; border:none; flex-shrink:0; white-space:nowrap; max-width:150px; overflow:hidden; text-overflow:ellipsis; }
 
     /* Nav */
     .bottom-nav { position:fixed; bottom:0; left:0; right:0; background:white; border-top:0.5px solid var(--gray-200); display:flex; padding-bottom:var(--safe-bottom); z-index:10; }
@@ -192,7 +192,7 @@
       <h1 id="header-title">Today</h1>
       <div class="header-sub" id="header-date"></div>
     </div>
-    <button class="avatar" id="avatar-btn" onclick="signOut()" title="Tap to sign out"></button>
+    <button class="avatar" id="avatar-btn" onclick="openProfileMenu()" title="Tap to manage profile"></button>
   </div>
 
   <div class="page active" id="page-today"><div id="goals-today-list"></div></div>
