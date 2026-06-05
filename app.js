@@ -157,11 +157,10 @@ function switchPage(page, btn) {
   document.getElementById('page-' + page).classList.add('active');
   btn.classList.add('active');
   currentPage = page;
-  const titles = { today: 'Today', stats: 'Stats', goals: 'Goals', meals: 'Meals', insights: 'Insights' };
+  const titles = { today: 'Today', stats: 'Stats', meals: 'Meals', insights: 'Insights' };
   document.getElementById('header-title').textContent = titles[page];
   if (page === 'today') renderToday();
   if (page === 'stats') renderStatsPage();
-  if (page === 'goals') renderGoalsPage();
   if (page === 'meals') renderMealsPage();
   if (page === 'insights') renderInsightsPage();
 }
@@ -215,6 +214,7 @@ function renderToday() {
 function renderStatsPage() {
   const select = document.getElementById('stats-goal-select');
   select.innerHTML = goals.map(g => `<option value="${g.id}">${g.emoji} ${g.name}</option>`).join('');
+  select.innerHTML += `<option value="__new__">+ New goal</option>`;
   if (selectedGoalId && goals.find(g => g.id === selectedGoalId)) {
     select.value = selectedGoalId;
   }
@@ -222,7 +222,13 @@ function renderStatsPage() {
 }
 
 function renderStats() {
-  const goalId = document.getElementById('stats-goal-select').value;
+  const select = document.getElementById('stats-goal-select');
+  const goalId = select.value;
+  if (goalId === '__new__') {
+    select.value = selectedGoalId || (goals[0]?.id ?? '');
+    openAddGoal();
+    return;
+  }
   if (!goalId) return;
   selectedGoalId = goalId;
   const goal = goals.find(g => g.id === goalId);
@@ -364,8 +370,10 @@ async function saveGoal() {
   if (error) { alert('Failed to save goal.'); return; }
 
   goals.push({ id, name, description, emoji });
+  selectedGoalId = id;
   closeModalDirect();
-  renderGoalsPage();
+  if (currentPage === 'stats') renderStatsPage();
+  else renderGoalsPage();
 }
 
 // ─── Insights page ────────────────────────────────────────────────────────────
