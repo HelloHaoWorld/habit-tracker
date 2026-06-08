@@ -44,6 +44,12 @@ function dateKey(date) {
   return date.toISOString().slice(0, 10);
 }
 
+function isApplicableDay(goal, dateStr) {
+  if (!goal || goal.schedule !== 'weekdays') return true;
+  const day = new Date(dateStr + 'T12:00:00').getDay(); // noon avoids timezone edge cases
+  return day >= 1 && day <= 5;
+}
+
 // ─── Data loading ─────────────────────────────────────────────────────────────
 
 async function loadGoals() {
@@ -111,16 +117,18 @@ function getGoalLogs(goalId) {
 }
 
 function getStreak(goalId) {
+  const goal = goals.find(g => g.id === goalId);
   const gl = getGoalLogs(goalId);
   const today = todayKey();
   let streak = 0;
   const d = new Date();
   while (true) {
     const key = dateKey(d);
+    if (!isApplicableDay(goal, key)) { d.setDate(d.getDate() - 1); continue; }
     const entry = gl[key];
     if (entry?.success === true) { streak++; }
     else if (entry?.success === false) { break; }
-    else if (key === today) { /* not logged yet, don't break */ }
+    else if (key === today) { /* not logged yet today */ }
     else { break; }
     d.setDate(d.getDate() - 1);
   }
@@ -128,8 +136,9 @@ function getStreak(goalId) {
 }
 
 function getBestStreak(goalId) {
+  const goal = goals.find(g => g.id === goalId);
   const gl = getGoalLogs(goalId);
-  const keys = Object.keys(gl).sort();
+  const keys = Object.keys(gl).filter(k => isApplicableDay(goal, k)).sort();
   let best = 0, cur = 0;
   for (const key of keys) {
     if (gl[key]?.success === true) { cur++; best = Math.max(best, cur); }
@@ -139,15 +148,21 @@ function getBestStreak(goalId) {
 }
 
 function getRate(goalId) {
+  const goal = goals.find(g => g.id === goalId);
   const gl = getGoalLogs(goalId);
-  const vals = Object.values(gl).filter(v => v.success === true || v.success === false);
-  if (!vals.length) return null;
-  return Math.round((vals.filter(v => v.success === true).length / vals.length) * 100);
+  const applicable = Object.entries(gl).filter(([k, v]) =>
+    isApplicableDay(goal, k) && (v.success === true || v.success === false)
+  );
+  if (!applicable.length) return null;
+  return Math.round((applicable.filter(([, v]) => v.success === true).length / applicable.length) * 100);
 }
 
 function getTotalLogged(goalId) {
+  const goal = goals.find(g => g.id === goalId);
   const gl = getGoalLogs(goalId);
-  return Object.values(gl).filter(v => v.success === true || v.success === false).length;
+  return Object.entries(gl).filter(([k, v]) =>
+    isApplicableDay(goal, k) && (v.success === true || v.success === false)
+  ).length;
 }
 
 // ─── Page routing ─────────────────────────────────────────────────────────────
@@ -170,13 +185,18 @@ function switchPage(page, btn) {
 function renderToday() {
   const container = document.getElementById('goals-today-list');
   const today = todayKey();
+  const applicableGoals = goals.filter(goal => isApplicableDay(goal, today));
 
   if (!goals.length) {
-    container.innerHTML = `<div class="empty"><div class="empty-icon">🎯</div>No goals yet.<br>Add one in the Goals tab!</div>`;
+    container.innerHTML = `<div class="empty"><div class="empty-icon">🎯</div>No habits yet.<br>Add one in the Habits tab!</div>`;
+    return;
+  }
+  if (!applicableGoals.length) {
+    container.innerHTML = `<div class="empty"><div class="empty-icon">🎉</div>No habits today.<br>Enjoy your weekend!</div>`;
     return;
   }
 
-  container.innerHTML = goals.map(goal => {
+  container.innerHTML = applicableGoals.map(goal => {
     const gl = getGoalLogs(goal.id);
     const entry = gl[today];
     const todayVal = entry?.success;
@@ -289,24 +309,29 @@ function renderStats() {
 }
 
 function renderHeatmap(goalId) {
+  const goal = goals.find(g => g.id === goalId);
   const gl = getGoalLogs(goalId);
   const today = todayKey();
+  const isWeekdayGoal = goal?.schedule === 'weekdays';
 
   document.getElementById('stats-heatmap-labels').innerHTML =
     ['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => `<div class="heatmap-day-label">${d}</div>`).join('');
+  document.getElementById('legend-skip').style.display = isWeekdayGoal ? 'flex' : 'none';
 
   let cells = '';
   for (let i = 29; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const key = dateKey(d);
+    const applicable = isApplicableDay(goal, key);
     const entry = gl[key];
     const isToday = key === today;
     let cls = 'heatmap-cell';
-    if (entry?.success === true) cls += ' hit';
+    if (!applicable) cls += ' skip';
+    else if (entry?.success === true) cls += ' hit';
     else if (entry?.success === false) cls += ' miss';
     if (isToday) cls += ' today';
-    cells += `<div class="${cls}" title="${key}">${d.getDate()}</div>`;
+    cells += `<div class="${cls}" title="${applicable ? key : 'Weekend'}">${d.getDate()}</div>`;
   }
   document.getElementById('stats-heatmap').innerHTML = cells;
 }
@@ -385,10 +410,16 @@ async function deleteGoal(id) {
 
 // ─── Add Goal Modal ───────────────────────────────────────────────────────────
 
+function setSchedule(value) {
+  document.getElementById('sched-daily').classList.toggle('active', value === 'daily');
+  document.getElementById('sched-weekdays').classList.toggle('active', value === 'weekdays');
+}
+
 function openAddGoal() {
   document.getElementById('input-name').value = '';
   document.getElementById('input-desc').value = '';
   document.getElementById('input-emoji').value = '🎯';
+  setSchedule('daily');
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(() => document.getElementById('input-name').focus(), 100);
 }
@@ -405,13 +436,14 @@ async function saveGoal() {
   const name = document.getElementById('input-name').value.trim();
   const description = document.getElementById('input-desc').value.trim();
   const emoji = document.getElementById('input-emoji').value.trim() || '🎯';
+  const schedule = document.getElementById('sched-weekdays').classList.contains('active') ? 'weekdays' : 'daily';
   if (!name) { document.getElementById('input-name').focus(); return; }
 
   const id = 'goal-' + Date.now();
-  const { error } = await db.from('goals').insert({ id, name, description, emoji, user_id: currentUser.id });
+  const { error } = await db.from('goals').insert({ id, name, description, emoji, schedule, user_id: currentUser.id });
   if (error) { alert('Failed to save goal.'); return; }
 
-  goals.push({ id, name, description, emoji });
+  goals.push({ id, name, description, emoji, schedule });
   selectedGoalId = id;
   closeModalDirect();
   renderStatsPage();
@@ -574,6 +606,7 @@ async function autoFillMissed() {
       d.setDate(d.getDate() - i);
       const key = dateKey(d);
       if (goalCreated && key < goalCreated) break; // before this goal existed
+      if (!isApplicableDay(goal, key)) continue;  // skip weekends for weekday goals
       if (!logs[goal.id]?.[key]) {
         if (!logs[goal.id]) logs[goal.id] = {};
         logs[goal.id][key] = { success: false, logged_by: 'auto' };
@@ -896,13 +929,14 @@ function closeMealModal() {
   overlay.classList.remove('open');
   overlay.innerHTML = `
     <div class="modal">
-      <div class="modal-title">New goal</div>
+      <div class="modal-title">New habit</div>
       <div class="form-group"><label class="form-label">Goal name</label><input class="form-input" id="input-name" type="text" placeholder="e.g. School drop-off" maxlength="40"/></div>
       <div class="form-group"><label class="form-label">Description</label><input class="form-input" id="input-desc" type="text" placeholder="e.g. Ethan at school by 8:45 AM" maxlength="60"/></div>
       <div class="form-group"><label class="form-label">Icon (emoji)</label><input class="form-input" id="input-emoji" type="text" placeholder="🎯" maxlength="4" style="font-size:22px;text-align:center;"/></div>
+      <div class="form-group"><label class="form-label">Schedule</label><div class="schedule-toggle"><button type="button" class="schedule-btn active" id="sched-daily" onclick="setSchedule('daily')">Every day</button><button type="button" class="schedule-btn" id="sched-weekdays" onclick="setSchedule('weekdays')">Weekdays only</button></div></div>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeModalDirect()">Cancel</button>
-        <button class="btn-primary" onclick="saveGoal()">Add goal</button>
+        <button class="btn-primary" onclick="saveGoal()">Add habit</button>
       </div>
     </div>`;
 }
