@@ -211,25 +211,43 @@ function renderToday() {
 // ─── Stats page ───────────────────────────────────────────────────────────────
 
 function renderStatsPage() {
-  const select = document.getElementById('stats-goal-select');
-  select.innerHTML = goals.map(g => `<option value="${g.id}">${g.emoji} ${g.name}</option>`).join('');
-  select.innerHTML += `<option value="__new__">+ New goal</option>`;
-  if (selectedGoalId && goals.find(g => g.id === selectedGoalId)) {
-    select.value = selectedGoalId;
+  if (!selectedGoalId && goals.length) selectedGoalId = goals[0].id;
+  const list = document.getElementById('stats-goal-list');
+  list.innerHTML = `<div class="goal-picker">${
+    goals.map(g => `
+      <div class="goal-picker-row${g.id === selectedGoalId ? ' active' : ''}" onclick="selectHabit('${g.id}')">
+        <span class="goal-picker-label">${g.emoji} ${g.name}</span>
+        <button class="goal-picker-delete" onclick="deleteHabitFromStats(event,'${g.id}')" title="Delete">−</button>
+      </div>`).join('')
   }
+    <div class="goal-picker-row goal-picker-add" onclick="openAddGoal()">
+      <span class="goal-picker-label">+ New habit</span>
+    </div>
+  </div>`;
   renderStats();
 }
 
-function renderStats() {
-  const select = document.getElementById('stats-goal-select');
-  const goalId = select.value;
-  if (goalId === '__new__') {
-    select.value = selectedGoalId || (goals[0]?.id ?? '');
-    openAddGoal();
-    return;
-  }
-  if (!goalId) return;
+function selectHabit(goalId) {
   selectedGoalId = goalId;
+  renderStatsPage();
+}
+
+async function deleteHabitFromStats(event, id) {
+  event.stopPropagation();
+  const goal = goals.find(g => g.id === id);
+  if (!confirm(`Delete "${goal?.name || 'this habit'}" and all its logged data?\n\nThis cannot be undone.`)) return;
+  await db.from('logs').delete().eq('goal_id', id);
+  await db.from('goals').delete().eq('id', id);
+  goals = goals.filter(g => g.id !== id);
+  delete logs[id];
+  delete insightsCache[id];
+  if (selectedGoalId === id) selectedGoalId = goals[0]?.id ?? null;
+  renderStatsPage();
+}
+
+function renderStats() {
+  if (!selectedGoalId) return;
+  const goalId = selectedGoalId;
   const goal = goals.find(g => g.id === goalId);
   document.getElementById('header-title').textContent = goal ? `${goal.emoji} ${goal.name}` : 'Stats';
   document.getElementById('s-streak').textContent = getStreak(goalId);
@@ -368,8 +386,7 @@ async function saveGoal() {
   goals.push({ id, name, description, emoji });
   selectedGoalId = id;
   closeModalDirect();
-  if (currentPage === 'stats') renderStatsPage();
-  else renderGoalsPage();
+  renderStatsPage();
 }
 
 // ─── Insights (in Stats tab) ──────────────────────────────────────────────────
