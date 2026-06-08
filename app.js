@@ -552,6 +552,31 @@ function subscribeToLogs() {
     .subscribe();
 }
 
+// ─── Auto-fill missed ─────────────────────────────────────────────────────────
+
+async function autoFillMissed() {
+  const inserts = [];
+
+  for (const goal of goals) {
+    const goalCreated = goal.created_at ? dateKey(new Date(goal.created_at)) : null;
+    for (let i = 1; i <= 30; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = dateKey(d);
+      if (goalCreated && key < goalCreated) break; // before this goal existed
+      if (!logs[goal.id]?.[key]) {
+        if (!logs[goal.id]) logs[goal.id] = {};
+        logs[goal.id][key] = { success: false, logged_by: 'auto' };
+        inserts.push({ goal_id: goal.id, date: key, success: false, logged_by: 'auto', user_id: currentUser.id, updated_at: new Date().toISOString() });
+      }
+    }
+  }
+
+  if (inserts.length) {
+    await db.from('logs').upsert(inserts, { onConflict: 'goal_id,date', ignoreDuplicates: true });
+  }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
@@ -577,6 +602,7 @@ async function init() {
   await loadProfile();
   await loadGoals();
   await loadLogs();
+  await autoFillMissed();
 
   // Set avatar display name
   const displayName = userProfile?.display_name || currentUser?.user_metadata?.name || currentUser?.email || '?';
