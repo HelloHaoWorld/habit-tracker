@@ -15,7 +15,7 @@ let logs = {};       // { goalId: { 'YYYY-MM-DD': { success, logged_by } } }
 let chartInstance = null;
 let currentPage = 'today';
 let selectedGoalId = null;
-let insightsCache = null; // { text: string, timestamp: Date }
+let insightsCache = {}; // keyed by goalId or 'all'
 let subscribed = false;
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -157,12 +157,11 @@ function switchPage(page, btn) {
   document.getElementById('page-' + page).classList.add('active');
   btn.classList.add('active');
   currentPage = page;
-  const titles = { today: 'Today', stats: 'Stats', meals: 'Meals', insights: 'Insights' };
+  const titles = { today: 'Today', stats: 'Stats', meals: 'Meals' };
   document.getElementById('header-title').textContent = titles[page];
   if (page === 'today') renderToday();
   if (page === 'stats') renderStatsPage();
   if (page === 'meals') renderMealsPage();
-  if (page === 'insights') renderInsightsPage();
 }
 
 // ─── Today page ───────────────────────────────────────────────────────────────
@@ -240,6 +239,7 @@ function renderStats() {
   document.getElementById('s-total').textContent = getTotalLogged(goalId);
   renderHeatmap(goalId);
   renderBarChart(goalId);
+  renderStatsInsights();
 }
 
 function renderHeatmap(goalId) {
@@ -376,28 +376,11 @@ async function saveGoal() {
   else renderGoalsPage();
 }
 
-// ─── Insights page ────────────────────────────────────────────────────────────
+// ─── Insights (in Stats tab) ──────────────────────────────────────────────────
 
-function renderInsightsPage() {
-  const empty = document.getElementById('insights-empty');
-  const loading = document.getElementById('insights-loading');
-  const result = document.getElementById('insights-result');
-  if (insightsCache) {
-    empty.style.display = 'none';
-    loading.style.display = 'none';
-    result.style.display = 'block';
-    document.getElementById('insights-content').innerHTML = renderMarkdown(insightsCache.text);
-    document.getElementById('insights-timestamp').textContent =
-      `Generated ${insightsCache.timestamp.toLocaleTimeString()}`;
-  } else {
-    empty.style.display = 'block';
-    loading.style.display = 'none';
-    result.style.display = 'none';
-  }
-}
-
-function prepareInsightsData() {
-  return goals.map(g => {
+function prepareInsightsData(goalId = null) {
+  const targets = goalId ? goals.filter(g => g.id === goalId) : goals;
+  return targets.map(g => {
     const gl = getGoalLogs(g.id);
     const recent30Days = [];
     for (let i = 0; i < 30; i++) {
@@ -435,12 +418,32 @@ function renderMarkdown(text) {
     .join('');
 }
 
-async function generateInsights() {
-  if (!goals.length) return;
+function renderStatsInsights() {
+  const cached = insightsCache[selectedGoalId];
+  const empty = document.getElementById('stats-insights-empty');
+  const loading = document.getElementById('stats-insights-loading');
+  const result = document.getElementById('stats-insights-result');
+  if (cached) {
+    empty.style.display = 'none';
+    loading.style.display = 'none';
+    result.style.display = 'block';
+    document.getElementById('stats-insights-content').innerHTML = renderMarkdown(cached.text);
+    document.getElementById('stats-insights-timestamp').textContent = `Generated ${cached.timestamp.toLocaleTimeString()}`;
+  } else {
+    empty.style.display = 'block';
+    loading.style.display = 'none';
+    result.style.display = 'none';
+  }
+}
 
-  document.getElementById('insights-empty').style.display = 'none';
-  document.getElementById('insights-loading').style.display = 'block';
-  document.getElementById('insights-result').style.display = 'none';
+async function generateInsights(mode) {
+  if (!goals.length) return;
+  const cacheKey = mode === 'goal' ? selectedGoalId : 'all';
+  const goalsData = mode === 'goal' ? prepareInsightsData(selectedGoalId) : prepareInsightsData();
+
+  document.getElementById('stats-insights-empty').style.display = 'none';
+  document.getElementById('stats-insights-loading').style.display = 'block';
+  document.getElementById('stats-insights-result').style.display = 'none';
 
   let fullText = '';
 
@@ -448,14 +451,14 @@ async function generateInsights() {
     const res = await fetch('/api/insights', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goals: prepareInsightsData() })
+      body: JSON.stringify({ goals: goalsData })
     });
 
     if (!res.ok) throw new Error('Request failed');
 
-    document.getElementById('insights-loading').style.display = 'none';
-    document.getElementById('insights-result').style.display = 'block';
-    const contentEl = document.getElementById('insights-content');
+    document.getElementById('stats-insights-loading').style.display = 'none';
+    document.getElementById('stats-insights-result').style.display = 'block';
+    const contentEl = document.getElementById('stats-insights-content');
     contentEl.innerHTML = '';
 
     const reader = res.body.getReader();
@@ -486,14 +489,14 @@ async function generateInsights() {
     }
 
     contentEl.innerHTML = renderMarkdown(fullText);
-    insightsCache = { text: fullText, timestamp: new Date() };
-    document.getElementById('insights-timestamp').textContent =
-      `Generated ${insightsCache.timestamp.toLocaleTimeString()}`;
+    insightsCache[cacheKey] = { text: fullText, timestamp: new Date() };
+    document.getElementById('stats-insights-timestamp').textContent =
+      `Generated ${insightsCache[cacheKey].timestamp.toLocaleTimeString()}`;
 
   } catch (err) {
-    document.getElementById('insights-loading').style.display = 'none';
-    document.getElementById('insights-result').style.display = 'block';
-    document.getElementById('insights-content').innerHTML =
+    document.getElementById('stats-insights-loading').style.display = 'none';
+    document.getElementById('stats-insights-result').style.display = 'block';
+    document.getElementById('stats-insights-content').innerHTML =
       `<div class="insights-error">${err.message || 'Could not load insights. Please try again.'}</div>`;
   }
 }

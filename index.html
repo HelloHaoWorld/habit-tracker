@@ -223,25 +223,25 @@
       <div class="card-title">Last 8 weeks</div>
       <div class="chart-wrap"><canvas id="bar-chart"></canvas></div>
     </div>
-  </div>
-
-<div class="page" id="page-insights">
-    <div id="insights-empty">
-      <div class="empty">
-        <div class="empty-icon">✨</div>
-        Get personalized insights on your habits powered by Claude AI.
+    <div class="card">
+      <div class="card-title">AI Insights</div>
+      <div id="stats-insights-empty">
+        <button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="generateInsights('goal')">Analyze this habit</button>
+        <button class="btn-secondary" style="width:100%;" onclick="generateInsights('all')">Analyze all habits</button>
       </div>
-      <button class="btn-primary" style="width:100%;margin-top:4px;" onclick="generateInsights()">Analyze my habits</button>
-    </div>
-    <div id="insights-loading" style="display:none;">
-      <div class="spinner"></div>
-      <div style="text-align:center;color:var(--gray-400);font-size:13px;margin-top:8px;">Analyzing your habits…</div>
-    </div>
-    <div id="insights-result" style="display:none;">
-      <div class="card" id="insights-content"></div>
-      <div class="insights-meta">
-        <div class="insights-timestamp" id="insights-timestamp"></div>
-        <button class="refresh-btn" onclick="generateInsights()">↻ Refresh</button>
+      <div id="stats-insights-loading" style="display:none;">
+        <div class="spinner"></div>
+        <div style="text-align:center;color:var(--gray-400);font-size:13px;margin-top:8px;">Analyzing…</div>
+      </div>
+      <div id="stats-insights-result" style="display:none;">
+        <div id="stats-insights-content"></div>
+        <div class="insights-meta" style="margin-top:12px;">
+          <div class="insights-timestamp" id="stats-insights-timestamp"></div>
+          <div style="display:flex;gap:8px;">
+            <button class="refresh-btn" onclick="generateInsights('goal')">↻ This habit</button>
+            <button class="refresh-btn" onclick="generateInsights('all')">↻ All habits</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -265,9 +265,6 @@
     </button>
 <button class="nav-btn" onclick="switchPage('meals',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>Meals
-    </button>
-    <button class="nav-btn" onclick="switchPage('insights',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Insights
     </button>
   </nav>
 </div>
