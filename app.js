@@ -222,7 +222,7 @@ function renderHabitPicker() {
           <span class="goal-picker-label">${g.emoji} ${g.name}</span>
           <button class="goal-picker-delete" onclick="deleteHabitFromStats(event,'${g.id}')" title="Delete">−</button>
         </div>`).join('')}
-      <div class="goal-picker-row goal-picker-add" onclick="openAddGoal()">
+      <div class="goal-picker-row goal-picker-add" onclick="openAddHabit()">
         <span class="goal-picker-label">+ New habit</span>
       </div>
     </div>` : '';
@@ -242,6 +242,12 @@ function renderStatsPage() {
 function toggleHabitPicker() {
   habitPickerOpen = !habitPickerOpen;
   renderHabitPicker();
+}
+
+function openAddHabit() {
+  habitPickerOpen = false;
+  renderHabitPicker();
+  openAddGoal();
 }
 
 function selectHabit(goalId) {
