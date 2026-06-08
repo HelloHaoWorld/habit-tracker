@@ -755,6 +755,7 @@ let recipes = [];
 let pantryItems = [];
 let mealPlan = {};
 let currentMealsTab = 'planner';
+let weekGroceryList = null;
 
 // ─── Meals data loading ───────────────────────────────────────────────────────
 
@@ -810,6 +811,11 @@ function getWeekDates() {
   return dates;
 }
 
+function getRemainingWeekDates() {
+  const today = todayKey();
+  return getWeekDates().filter(d => d >= today);
+}
+
 function getMealNutrition(meal) {
   if (!meal) return [];
   const covered = new Set();
@@ -852,43 +858,71 @@ function renderPlanner(container) {
       </div>`;
   }).join('');
 
+  const groceryHtml = weekGroceryList ? `
+    <div class="card" style="margin-top:4px;">
+      <div class="card-title">🛒 Grocery list</div>
+      ${weekGroceryList.length
+        ? weekGroceryList.map(item => `<div style="padding:7px 0;font-size:14px;border-bottom:0.5px solid var(--gray-100);color:var(--gray-900);">${item}</div>`).join('')
+        : '<div style="color:var(--gray-400);font-size:14px;padding:8px 0;">Everything needed is already in your pantry!</div>'}
+    </div>` : '';
+
   container.innerHTML = `
-    <button class="action-btn" onclick="autoSuggestWeek()">✨ Auto-suggest week</button>
+    <button class="action-btn" id="suggest-btn" onclick="autoSuggestWeek()">✨ Auto-suggest week</button>
     ${rows}
+    ${groceryHtml}
   `;
 }
 
 // ─── Auto-suggest ─────────────────────────────────────────────────────────────
 
 async function autoSuggestWeek() {
-  const dates = getWeekDates();
+  const dates = getRemainingWeekDates();
+  if (!dates.length) { alert('No remaining weekdays this week!'); return; }
 
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 10);
-  const recentDates = Object.keys(mealPlan).filter(d => new Date(d) >= cutoff);
-  const recentRecipeIds = new Set(recentDates.map(d => mealPlan[d]?.recipe_id).filter(Boolean));
+  const btn = document.getElementById('suggest-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Suggesting…'; }
 
-  const available = recipes.filter(r => !recentRecipeIds.has(r.id));
-  const sorted = [...available].sort((a, b) => b.ethan_rating - a.ethan_rating);
+  try {
+    const res = await fetch('/api/suggest-meals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipes, pantryItems, dates })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
 
-  for (let i = 0; i < dates.length; i++) {
-    const date = dates[i];
-    if (mealPlan[date]?.confirmed) continue;
+    for (const meal of (data.meals || [])) {
+      // Find existing recipe by name match (case-insensitive) or create a new one
+      let recipe = recipes.find(r => r.name.toLowerCase() === meal.name.toLowerCase());
+      if (!recipe) {
+        const { data: inserted, error } = await db.from('recipes').insert({
+          name: meal.name,
+          description: meal.description,
+          ingredients: meal.ingredients,
+          nutrition_tags: meal.nutrition_tags || ['protein', 'carb', 'fat'],
+          prep_time_minutes: 10,
+          ethan_rating: 3
+        }).select().single();
+        if (!error && inserted) {
+          recipes.push(inserted);
+          recipe = inserted;
+        }
+      }
+      if (!recipe) continue;
 
-    const dayOfWeek = new Date(date).getDay();
-    const isBusyDay = dayOfWeek === 1 || dayOfWeek === 5;
-    const filtered = sorted.filter(r => r.prep_time_minutes <= 15);
-    const pool = isBusyDay && filtered.length ? filtered : sorted;
+      const id = 'meal-' + meal.date;
+      const { error: mealErr } = await db.from('meals').upsert(
+        { id, date: meal.date, recipe_id: recipe.id, confirmed: false },
+        { onConflict: 'date' }
+      );
+      if (!mealErr) mealPlan[meal.date] = { id, date: meal.date, recipe_id: recipe.id, confirmed: false };
+    }
 
-    const pick = pool[i % pool.length];
-    if (!pick) continue;
-
-    const id = 'meal-' + date;
-    const { error } = await db.from('meals').upsert(
-      { id, date, recipe_id: pick.id, confirmed: false },
-      { onConflict: 'date' }
-    );
-    if (!error) mealPlan[date] = { id, date, recipe_id: pick.id, confirmed: false };
+    weekGroceryList = data.groceryList || null;
+  } catch (err) {
+    alert('Could not suggest meals: ' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✨ Auto-suggest week'; }
   }
 
   renderMealsPage();
