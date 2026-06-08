@@ -240,6 +240,7 @@ function renderHabitPicker() {
       ${goals.map(g => `
         <div class="goal-picker-row${g.id === selectedGoalId ? ' active' : ''}" onclick="selectHabit('${g.id}')">
           <span class="goal-picker-label">${g.emoji} ${g.name}</span>
+          <button class="goal-picker-edit" onclick="openEditHabit(event,'${g.id}')" title="Edit">✏️</button>
           <button class="goal-picker-delete" onclick="deleteHabitFromStats(event,'${g.id}')" title="Delete">−</button>
         </div>`).join('')}
       <div class="goal-picker-row goal-picker-add" onclick="openAddHabit()">
@@ -291,6 +292,45 @@ async function deleteHabitFromStats(event, id) {
   delete insightsCache[id];
   if (selectedGoalId === id) selectedGoalId = goals[0]?.id ?? null;
   renderStatsPage();
+}
+
+function openEditHabit(event, id) {
+  event.stopPropagation();
+  habitPickerOpen = false;
+  const g = goals.find(goal => goal.id === id);
+  if (!g) return;
+  const overlay = document.getElementById('modal-overlay');
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">Edit habit</div>
+      <div class="form-group"><label class="form-label">Goal name</label><input class="form-input" id="input-name" type="text" value="${g.name}" maxlength="40"/></div>
+      <div class="form-group"><label class="form-label">Description</label><input class="form-input" id="input-desc" type="text" value="${g.description || ''}" maxlength="60"/></div>
+      <div class="form-group"><label class="form-label">Icon (emoji)</label><input class="form-input" id="input-emoji" type="text" value="${g.emoji}" maxlength="4" style="font-size:22px;text-align:center;"/></div>
+      <div class="form-group"><label class="form-label">Schedule</label><div class="schedule-toggle"><button type="button" class="schedule-btn${g.schedule !== 'weekdays' ? ' active' : ''}" id="sched-daily" onclick="setSchedule('daily')">Every day</button><button type="button" class="schedule-btn${g.schedule === 'weekdays' ? ' active' : ''}" id="sched-weekdays" onclick="setSchedule('weekdays')">Weekdays only</button></div></div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModalDirect()">Cancel</button>
+        <button class="btn-primary" onclick="saveEditGoal('${id}')">Save changes</button>
+      </div>
+    </div>`;
+  overlay.classList.add('open');
+  setTimeout(() => document.getElementById('input-name').focus(), 50);
+}
+
+async function saveEditGoal(id) {
+  const name = document.getElementById('input-name').value.trim();
+  const description = document.getElementById('input-desc').value.trim();
+  const emoji = document.getElementById('input-emoji').value.trim() || '🎯';
+  const schedule = document.getElementById('sched-weekdays').classList.contains('active') ? 'weekdays' : 'daily';
+  if (!name) { document.getElementById('input-name').focus(); return; }
+
+  const { error } = await db.from('goals').update({ name, description, emoji, schedule }).eq('id', id);
+  if (error) { alert('Failed to save changes.'); return; }
+
+  const goal = goals.find(g => g.id === id);
+  if (goal) Object.assign(goal, { name, description, emoji, schedule });
+  closeModalDirect();
+  renderStatsPage();
+  renderToday();
 }
 
 function renderStats() {
