@@ -201,6 +201,27 @@
     <div style="margin-bottom:14px;">
       <select id="stats-goal-select" class="form-input" onchange="renderStats()"></select>
     </div>
+    <div class="card">
+      <div class="card-title">AI Insights</div>
+      <div id="stats-insights-empty">
+        <button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="generateInsights('goal')">Analyze this habit</button>
+        <button class="btn-secondary" style="width:100%;" onclick="generateInsights('all')">Analyze all habits</button>
+      </div>
+      <div id="stats-insights-loading" style="display:none;">
+        <div class="spinner"></div>
+        <div style="text-align:center;color:var(--gray-400);font-size:13px;margin-top:8px;">Analyzing…</div>
+      </div>
+      <div id="stats-insights-result" style="display:none;">
+        <div id="stats-insights-content"></div>
+        <div class="insights-meta" style="margin-top:12px;">
+          <div class="insights-timestamp" id="stats-insights-timestamp"></div>
+          <div style="display:flex;gap:8px;">
+            <button class="refresh-btn" onclick="generateInsights('goal')">↻ This habit</button>
+            <button class="refresh-btn" onclick="generateInsights('all')">↻ All habits</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="stats-row">
       <div class="stat-card"><div class="stat-label">Current streak</div><div class="stat-value" id="s-streak">—</div><div class="stat-unit">days in a row</div></div>
       <div class="stat-card"><div class="stat-label">Success rate</div><div class="stat-value" id="s-rate">—</div><div class="stat-unit">all time</div></div>
@@ -222,27 +243,6 @@
     <div class="card">
       <div class="card-title">Last 8 weeks</div>
       <div class="chart-wrap"><canvas id="bar-chart"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-title">AI Insights</div>
-      <div id="stats-insights-empty">
-        <button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="generateInsights('goal')">Analyze this habit</button>
-        <button class="btn-secondary" style="width:100%;" onclick="generateInsights('all')">Analyze all habits</button>
-      </div>
-      <div id="stats-insights-loading" style="display:none;">
-        <div class="spinner"></div>
-        <div style="text-align:center;color:var(--gray-400);font-size:13px;margin-top:8px;">Analyzing…</div>
-      </div>
-      <div id="stats-insights-result" style="display:none;">
-        <div id="stats-insights-content"></div>
-        <div class="insights-meta" style="margin-top:12px;">
-          <div class="insights-timestamp" id="stats-insights-timestamp"></div>
-          <div style="display:flex;gap:8px;">
-            <button class="refresh-btn" onclick="generateInsights('goal')">↻ This habit</button>
-            <button class="refresh-btn" onclick="generateInsights('all')">↻ All habits</button>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
