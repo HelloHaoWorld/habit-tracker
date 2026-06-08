@@ -260,6 +260,7 @@ async function deleteHabitFromStats(event, id) {
   event.stopPropagation();
   const goal = goals.find(g => g.id === id);
   if (!confirm(`Delete "${goal?.name || 'this habit'}" and all its logged data?\n\nThis cannot be undone.`)) return;
+  habitPickerOpen = false;
   await db.from('logs').delete().eq('goal_id', id);
   await db.from('goals').delete().eq('id', id);
   goals = goals.filter(g => g.id !== id);
