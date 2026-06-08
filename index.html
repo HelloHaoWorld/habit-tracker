@@ -116,11 +116,14 @@
     .btn-primary { flex:1; padding:13px; background:var(--green); color:white; border:none; border-radius:var(--radius-md); font-size:15px; font-weight:500; cursor:pointer; font-family:inherit; }
     .btn-secondary { flex:1; padding:13px; background:var(--gray-100); color:var(--gray-600); border:none; border-radius:var(--radius-md); font-size:15px; cursor:pointer; font-family:inherit; }
 
-    .goal-picker-trigger { display:flex; align-items:center; justify-content:space-between; width:100%; padding:11px 14px; border-radius:var(--radius-sm); border:0.5px solid var(--gray-200); background:var(--gray-50); font-size:15px; font-family:inherit; color:var(--gray-900); cursor:pointer; text-align:left; }
-    .goal-picker-dropdown { border:0.5px solid var(--gray-200); border-radius:var(--radius-md); background:white; overflow:hidden; margin-top:6px; box-shadow:0 4px 12px rgba(0,0,0,0.08); }
-    .goal-picker-row { display:flex; align-items:center; padding:11px 14px; cursor:pointer; font-size:15px; border-bottom:0.5px solid var(--gray-100); }
+    .goal-picker-trigger { display:flex; align-items:center; justify-content:space-between; width:100%; padding:14px 18px; border-radius:var(--radius-lg); border:1.5px solid var(--green); background:white; font-family:inherit; color:var(--gray-900); cursor:pointer; text-align:left; box-shadow:0 2px 12px rgba(29,158,117,0.15); }
+    .goal-picker-trigger-inner { flex:1; }
+    .goal-picker-trigger-label { font-size:11px; font-weight:600; color:var(--green); text-transform:uppercase; letter-spacing:0.6px; margin-bottom:3px; }
+    .goal-picker-trigger-name { font-size:17px; font-weight:600; color:var(--gray-900); }
+    .goal-picker-dropdown { border:0.5px solid var(--gray-200); border-radius:var(--radius-lg); background:white; overflow:hidden; margin-top:8px; box-shadow:0 8px 24px rgba(0,0,0,0.10); }
+    .goal-picker-row { display:flex; align-items:center; padding:13px 16px; cursor:pointer; font-size:15px; border-bottom:0.5px solid var(--gray-100); }
     .goal-picker-row:last-child { border-bottom:none; }
-    .goal-picker-row.active { background:var(--green-light); color:var(--green-dark); font-weight:500; }
+    .goal-picker-row.active { background:var(--green-light); color:var(--green-dark); font-weight:600; }
     .goal-picker-label { flex:1; }
     .goal-picker-delete { background:none; border:none; color:var(--gray-400); font-size:22px; line-height:1; cursor:pointer; padding:0 4px; flex-shrink:0; }
     .goal-picker-delete:hover { color:var(--red); }

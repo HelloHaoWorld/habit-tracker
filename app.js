@@ -214,7 +214,7 @@ function renderToday() {
 function renderHabitPicker() {
   if (!selectedGoalId && goals.length) selectedGoalId = goals[0].id;
   const goal = goals.find(g => g.id === selectedGoalId);
-  const chevron = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="flex-shrink:0;transition:transform 0.2s;transform:rotate(${habitPickerOpen ? 180 : 0}deg)"><polyline points="6 9 12 15 18 9"/></svg>`;
+  const chevron = `<svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" width="20" height="20" style="flex-shrink:0;transition:transform 0.2s;transform:rotate(${habitPickerOpen ? 180 : 0}deg)"><polyline points="6 9 12 15 18 9"/></svg>`;
   const dropdown = habitPickerOpen ? `
     <div class="goal-picker-dropdown">
       ${goals.map(g => `
@@ -228,7 +228,10 @@ function renderHabitPicker() {
     </div>` : '';
   document.getElementById('stats-goal-list').innerHTML = `
     <button class="goal-picker-trigger" onclick="toggleHabitPicker()">
-      <span>${goal ? `${goal.emoji} ${goal.name}` : 'Select a habit'}</span>
+      <div class="goal-picker-trigger-inner">
+        <div class="goal-picker-trigger-label">Current habit</div>
+        <div class="goal-picker-trigger-name">${goal ? `${goal.emoji} ${goal.name}` : 'Select a habit'}</div>
+      </div>
       ${chevron}
     </button>
     ${dropdown}`;
