@@ -157,7 +157,7 @@ function switchPage(page, btn) {
   document.getElementById('page-' + page).classList.add('active');
   btn.classList.add('active');
   currentPage = page;
-  const titles = { today: 'Today', stats: 'Stats', meals: 'Meals' };
+  const titles = { today: 'Today', stats: 'Habits', meals: 'Meals' };
   document.getElementById('header-title').textContent = titles[page];
   if (page === 'today') renderToday();
   if (page === 'stats') renderStatsPage();
