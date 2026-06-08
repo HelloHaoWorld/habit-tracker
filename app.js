@@ -244,27 +244,23 @@ function renderStats() {
 
 function renderHeatmap(goalId) {
   const gl = getGoalLogs(goalId);
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
   const today = todayKey();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDay = new Date(year, month, 1).getDay();
 
   document.getElementById('stats-heatmap-labels').innerHTML =
     ['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => `<div class="heatmap-day-label">${d}</div>`).join('');
 
   let cells = '';
-  for (let i = 0; i < firstDay; i++) cells += `<div class="heatmap-cell empty"></div>`;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const key = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = dateKey(d);
     const entry = gl[key];
     const isToday = key === today;
     let cls = 'heatmap-cell';
     if (entry?.success === true) cls += ' hit';
     else if (entry?.success === false) cls += ' miss';
     if (isToday) cls += ' today';
-    cells += `<div class="${cls}" title="${key}">${d}</div>`;
+    cells += `<div class="${cls}" title="${key}">${d.getDate()}</div>`;
   }
   document.getElementById('stats-heatmap').innerHTML = cells;
 }
