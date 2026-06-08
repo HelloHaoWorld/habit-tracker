@@ -45,9 +45,32 @@ function dateKey(date) {
 }
 
 function isApplicableDay(goal, dateStr) {
-  if (!goal || goal.schedule !== 'weekdays') return true;
-  const day = new Date(dateStr + 'T12:00:00').getDay(); // noon avoids timezone edge cases
-  return day >= 1 && day <= 5;
+  const schedule = goal?.schedule || 'daily';
+  if (schedule === 'daily') return true;
+  const day = new Date(dateStr + 'T12:00:00').getDay();
+  if (schedule === 'weekdays') return day >= 1 && day <= 5;
+  if (schedule === 'weekends') return day === 0 || day === 6;
+  if (schedule.startsWith('custom:')) {
+    return schedule.slice(7).split(',').map(Number).includes(day);
+  }
+  return true;
+}
+
+function schedulePickerHTML(current = 'daily') {
+  const isCustom = current?.startsWith('custom:');
+  const active = isCustom ? 'custom' : (current || 'daily');
+  const customDays = isCustom ? current.slice(7).split(',').map(Number) : [];
+  const days = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  return `
+    <div class="schedule-toggle">
+      <button type="button" class="schedule-btn${active==='daily'?' active':''}" id="sched-daily" onclick="setSchedule('daily')">Daily</button>
+      <button type="button" class="schedule-btn${active==='weekdays'?' active':''}" id="sched-weekdays" onclick="setSchedule('weekdays')">Weekdays</button>
+      <button type="button" class="schedule-btn${active==='weekends'?' active':''}" id="sched-weekends" onclick="setSchedule('weekends')">Weekends</button>
+      <button type="button" class="schedule-btn${active==='custom'?' active':''}" id="sched-custom" onclick="setSchedule('custom')">Custom</button>
+    </div>
+    <div class="day-picker" id="day-picker" style="display:${active==='custom'?'flex':'none'}">
+      ${days.map((d,i) => `<button type="button" class="day-btn${customDays.includes(i)?' active':''}" data-day="${i}" onclick="toggleDay(this)">${d}</button>`).join('')}
+    </div>`;
 }
 
 // ─── Data loading ─────────────────────────────────────────────────────────────
@@ -306,7 +329,7 @@ function openEditHabit(event, id) {
       <div class="form-group"><label class="form-label">Goal name</label><input class="form-input" id="input-name" type="text" value="${g.name}" maxlength="40"/></div>
       <div class="form-group"><label class="form-label">Description</label><input class="form-input" id="input-desc" type="text" value="${g.description || ''}" maxlength="60"/></div>
       <div class="form-group"><label class="form-label">Icon (emoji)</label><input class="form-input" id="input-emoji" type="text" value="${g.emoji}" maxlength="4" style="font-size:22px;text-align:center;"/></div>
-      <div class="form-group"><label class="form-label">Schedule</label><div class="schedule-toggle"><button type="button" class="schedule-btn${g.schedule !== 'weekdays' ? ' active' : ''}" id="sched-daily" onclick="setSchedule('daily')">Every day</button><button type="button" class="schedule-btn${g.schedule === 'weekdays' ? ' active' : ''}" id="sched-weekdays" onclick="setSchedule('weekdays')">Weekdays only</button></div></div>
+      <div class="form-group"><label class="form-label">Schedule</label>${schedulePickerHTML(g.schedule)}</div>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeModalDirect()">Cancel</button>
         <button class="btn-primary" onclick="saveEditGoal('${id}')">Save changes</button>
@@ -320,7 +343,7 @@ async function saveEditGoal(id) {
   const name = document.getElementById('input-name').value.trim();
   const description = document.getElementById('input-desc').value.trim();
   const emoji = document.getElementById('input-emoji').value.trim() || '🎯';
-  const schedule = document.getElementById('sched-weekdays').classList.contains('active') ? 'weekdays' : 'daily';
+  const schedule = getScheduleValue();
   if (!name) { document.getElementById('input-name').focus(); return; }
 
   const { error } = await db.from('goals').update({ name, description, emoji, schedule }).eq('id', id);
@@ -352,11 +375,11 @@ function renderHeatmap(goalId) {
   const goal = goals.find(g => g.id === goalId);
   const gl = getGoalLogs(goalId);
   const today = todayKey();
-  const isWeekdayGoal = goal?.schedule === 'weekdays';
+  const hasSchedule = goal?.schedule && goal.schedule !== 'daily';
 
   document.getElementById('stats-heatmap-labels').innerHTML =
     ['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => `<div class="heatmap-day-label">${d}</div>`).join('');
-  document.getElementById('legend-skip').style.display = isWeekdayGoal ? 'flex' : 'none';
+  document.getElementById('legend-skip').style.display = hasSchedule ? 'flex' : 'none';
 
   let cells = '';
   for (let i = 29; i >= 0; i--) {
@@ -451,8 +474,22 @@ async function deleteGoal(id) {
 // ─── Add Goal Modal ───────────────────────────────────────────────────────────
 
 function setSchedule(value) {
-  document.getElementById('sched-daily').classList.toggle('active', value === 'daily');
-  document.getElementById('sched-weekdays').classList.toggle('active', value === 'weekdays');
+  ['daily','weekdays','weekends','custom'].forEach(v =>
+    document.getElementById(`sched-${v}`)?.classList.toggle('active', v === value)
+  );
+  const dp = document.getElementById('day-picker');
+  if (dp) dp.style.display = value === 'custom' ? 'flex' : 'none';
+}
+
+function toggleDay(btn) { btn.classList.toggle('active'); }
+
+function getScheduleValue() {
+  const active = ['daily','weekdays','weekends','custom'].find(v =>
+    document.getElementById(`sched-${v}`)?.classList.contains('active')
+  ) || 'daily';
+  if (active !== 'custom') return active;
+  const days = [...document.querySelectorAll('.day-btn.active')].map(b => b.dataset.day);
+  return days.length ? `custom:${days.join(',')}` : 'daily';
 }
 
 function openAddGoal() {
@@ -476,7 +513,7 @@ async function saveGoal() {
   const name = document.getElementById('input-name').value.trim();
   const description = document.getElementById('input-desc').value.trim();
   const emoji = document.getElementById('input-emoji').value.trim() || '🎯';
-  const schedule = document.getElementById('sched-weekdays').classList.contains('active') ? 'weekdays' : 'daily';
+  const schedule = getScheduleValue();
   if (!name) { document.getElementById('input-name').focus(); return; }
 
   const id = 'goal-' + Date.now();
@@ -973,7 +1010,7 @@ function closeMealModal() {
       <div class="form-group"><label class="form-label">Goal name</label><input class="form-input" id="input-name" type="text" placeholder="e.g. School drop-off" maxlength="40"/></div>
       <div class="form-group"><label class="form-label">Description</label><input class="form-input" id="input-desc" type="text" placeholder="e.g. Ethan at school by 8:45 AM" maxlength="60"/></div>
       <div class="form-group"><label class="form-label">Icon (emoji)</label><input class="form-input" id="input-emoji" type="text" placeholder="🎯" maxlength="4" style="font-size:22px;text-align:center;"/></div>
-      <div class="form-group"><label class="form-label">Schedule</label><div class="schedule-toggle"><button type="button" class="schedule-btn active" id="sched-daily" onclick="setSchedule('daily')">Every day</button><button type="button" class="schedule-btn" id="sched-weekdays" onclick="setSchedule('weekdays')">Weekdays only</button></div></div>
+      <div class="form-group"><label class="form-label">Schedule</label>${schedulePickerHTML()}</div>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeModalDirect()">Cancel</button>
         <button class="btn-primary" onclick="saveGoal()">Add habit</button>

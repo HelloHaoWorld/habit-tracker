@@ -91,8 +91,11 @@
     .heatmap-cell.empty { background:transparent; }
     .heatmap-cell.skip { background:var(--gray-100); opacity:0.35; }
     .schedule-toggle { display:flex; border-radius:var(--radius-sm); overflow:hidden; border:0.5px solid var(--gray-200); }
-    .schedule-btn { flex:1; padding:9px; background:var(--gray-50); border:none; font-size:13px; font-family:inherit; cursor:pointer; color:var(--gray-600); transition:background 0.15s,color 0.15s; }
+    .schedule-btn { flex:1; padding:9px 4px; background:var(--gray-50); border:none; font-size:12px; font-family:inherit; cursor:pointer; color:var(--gray-600); transition:background 0.15s,color 0.15s; }
     .schedule-btn.active { background:var(--green); color:white; font-weight:500; }
+    .day-picker { display:flex; gap:6px; margin-top:10px; justify-content:center; }
+    .day-btn { width:38px; height:38px; border-radius:50%; border:1.5px solid var(--gray-200); background:var(--gray-50); font-size:11px; font-weight:600; cursor:pointer; color:var(--gray-600); font-family:inherit; transition:background 0.15s,border-color 0.15s,color 0.15s; }
+    .day-btn.active { background:var(--green); border-color:var(--green); color:white; }
     .legend { display:flex; gap:14px; margin-top:8px; }
     .legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--gray-400); }
     .legend-dot { width:10px; height:10px; border-radius:3px; }
@@ -254,7 +257,7 @@
       <div class="legend" id="stats-heatmap-legend">
         <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>On time</div>
         <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Missed</div>
-        <div class="legend-item" id="legend-skip" style="display:none"><div class="legend-dot" style="background:var(--gray-100);opacity:0.4;border:0.5px solid var(--gray-200)"></div>Weekend</div>
+        <div class="legend-item" id="legend-skip" style="display:none"><div class="legend-dot" style="background:var(--gray-100);opacity:0.4;border:0.5px solid var(--gray-200)"></div>Not tracked</div>
       </div>
     </div>
     <div class="card">
@@ -295,8 +298,19 @@
     <div class="form-group">
       <label class="form-label">Schedule</label>
       <div class="schedule-toggle">
-        <button type="button" class="schedule-btn active" id="sched-daily" onclick="setSchedule('daily')">Every day</button>
-        <button type="button" class="schedule-btn" id="sched-weekdays" onclick="setSchedule('weekdays')">Weekdays only</button>
+        <button type="button" class="schedule-btn active" id="sched-daily" onclick="setSchedule('daily')">Daily</button>
+        <button type="button" class="schedule-btn" id="sched-weekdays" onclick="setSchedule('weekdays')">Weekdays</button>
+        <button type="button" class="schedule-btn" id="sched-weekends" onclick="setSchedule('weekends')">Weekends</button>
+        <button type="button" class="schedule-btn" id="sched-custom" onclick="setSchedule('custom')">Custom</button>
+      </div>
+      <div class="day-picker" id="day-picker" style="display:none;">
+        <button type="button" class="day-btn" data-day="0" onclick="toggleDay(this)">Su</button>
+        <button type="button" class="day-btn" data-day="1" onclick="toggleDay(this)">Mo</button>
+        <button type="button" class="day-btn" data-day="2" onclick="toggleDay(this)">Tu</button>
+        <button type="button" class="day-btn" data-day="3" onclick="toggleDay(this)">We</button>
+        <button type="button" class="day-btn" data-day="4" onclick="toggleDay(this)">Th</button>
+        <button type="button" class="day-btn" data-day="5" onclick="toggleDay(this)">Fr</button>
+        <button type="button" class="day-btn" data-day="6" onclick="toggleDay(this)">Sa</button>
       </div>
     </div>
     <div class="modal-actions">
