@@ -15,6 +15,7 @@ let logs = {};       // { goalId: { 'YYYY-MM-DD': { success, logged_by } } }
 let chartInstance = null;
 let currentPage = 'today';
 let selectedGoalId = null;
+let habitPickerOpen = false;
 let insightsCache = {}; // keyed by goalId or 'all'
 let subscribed = false;
 
@@ -210,25 +211,42 @@ function renderToday() {
 
 // ─── Stats page ───────────────────────────────────────────────────────────────
 
-function renderStatsPage() {
+function renderHabitPicker() {
   if (!selectedGoalId && goals.length) selectedGoalId = goals[0].id;
-  const list = document.getElementById('stats-goal-list');
-  list.innerHTML = `<div class="goal-picker">${
-    goals.map(g => `
-      <div class="goal-picker-row${g.id === selectedGoalId ? ' active' : ''}" onclick="selectHabit('${g.id}')">
-        <span class="goal-picker-label">${g.emoji} ${g.name}</span>
-        <button class="goal-picker-delete" onclick="deleteHabitFromStats(event,'${g.id}')" title="Delete">−</button>
-      </div>`).join('')
-  }
-    <div class="goal-picker-row goal-picker-add" onclick="openAddGoal()">
-      <span class="goal-picker-label">+ New habit</span>
-    </div>
-  </div>`;
+  const goal = goals.find(g => g.id === selectedGoalId);
+  const chevron = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="flex-shrink:0;transition:transform 0.2s;transform:rotate(${habitPickerOpen ? 180 : 0}deg)"><polyline points="6 9 12 15 18 9"/></svg>`;
+  const dropdown = habitPickerOpen ? `
+    <div class="goal-picker-dropdown">
+      ${goals.map(g => `
+        <div class="goal-picker-row${g.id === selectedGoalId ? ' active' : ''}" onclick="selectHabit('${g.id}')">
+          <span class="goal-picker-label">${g.emoji} ${g.name}</span>
+          <button class="goal-picker-delete" onclick="deleteHabitFromStats(event,'${g.id}')" title="Delete">−</button>
+        </div>`).join('')}
+      <div class="goal-picker-row goal-picker-add" onclick="openAddGoal()">
+        <span class="goal-picker-label">+ New habit</span>
+      </div>
+    </div>` : '';
+  document.getElementById('stats-goal-list').innerHTML = `
+    <button class="goal-picker-trigger" onclick="toggleHabitPicker()">
+      <span>${goal ? `${goal.emoji} ${goal.name}` : 'Select a habit'}</span>
+      ${chevron}
+    </button>
+    ${dropdown}`;
+}
+
+function renderStatsPage() {
+  renderHabitPicker();
   renderStats();
+}
+
+function toggleHabitPicker() {
+  habitPickerOpen = !habitPickerOpen;
+  renderHabitPicker();
 }
 
 function selectHabit(goalId) {
   selectedGoalId = goalId;
+  habitPickerOpen = false;
   renderStatsPage();
 }
 
