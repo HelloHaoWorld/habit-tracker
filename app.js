@@ -1199,7 +1199,7 @@ function openSuggestRecipe() {
   document.getElementById('modal-overlay').innerHTML = `
     <div class="modal">
       <div class="modal-title">✨ Suggest recipe</div>
-      ${chips('Protein', ['Chicken','Egg','Tuna','Cheese','Tofu','Beans','Salmon','Ham'])}
+      ${chips('Protein', ['Chicken','Egg','Tuna','Cheese','Tofu','Beans','Salmon','Ham','Pork','Lamb','Beef'])}
       ${chips('Carb', ['Rice','Pasta','Bread','Tortilla','Quinoa','Noodles'])}
       ${chips('Veggie', ['Cucumber','Carrot','Broccoli','Spinach','Tomato','Corn','Edamame'])}
       <div class="form-group">
@@ -1254,7 +1254,10 @@ function showSuggestionResults() {
         <div style="font-size:15px;font-weight:600;color:var(--gray-900);">${r.name}</div>
         <div style="font-size:13px;color:var(--gray-500);margin:3px 0 5px;">${r.description || ''}</div>
         <div style="font-size:12px;color:var(--gray-400);margin-bottom:6px;">${(r.ingredients||[]).join(', ')}</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;">${(r.nutrition_tags||[]).map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;">
+          ${(r.nutrition_tags||[]).map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}
+          <a href="https://www.google.com/search?q=${encodeURIComponent(r.name + ' recipe')}" target="_blank" onclick="event.stopPropagation()" style="font-size:12px;color:var(--green);text-decoration:none;margin-left:auto;">🔗 See recipe</a>
+        </div>
       </div>
     </label>`).join('');
 
