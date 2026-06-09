@@ -865,13 +865,27 @@ function renderPlanner(container) {
       </div>`;
   }).join('');
 
-  const groceryHtml = weekGroceryList ? `
-    <div class="card" style="margin-top:4px;">
-      <div class="card-title">🛒 Grocery list</div>
-      ${weekGroceryList.length
-        ? weekGroceryList.map(item => `<div style="padding:7px 0;font-size:14px;border-bottom:0.5px solid var(--gray-100);color:var(--gray-900);">${item}</div>`).join('')
-        : '<div style="color:var(--gray-400);font-size:14px;padding:8px 0;">Everything needed is already in your pantry!</div>'}
-    </div>` : '';
+  let groceryHtml = '';
+  if (weekGroceryList) {
+    const isCategorized = typeof weekGroceryList === 'object' && !Array.isArray(weekGroceryList);
+    const categories = isCategorized ? weekGroceryList : null;
+    const flatList = Array.isArray(weekGroceryList) ? weekGroceryList : null;
+
+    let bodyHtml = '';
+    if (categories && Object.keys(categories).length) {
+      bodyHtml = Object.entries(categories).map(([cat, items]) => `
+        <div style="margin-top:14px;">
+          <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">${cat}</div>
+          ${items.map(item => `<div style="padding:7px 0;font-size:14px;border-bottom:0.5px solid var(--gray-100);color:var(--gray-900);">${item}</div>`).join('')}
+        </div>`).join('');
+    } else if (flatList && flatList.length) {
+      bodyHtml = flatList.map(item => `<div style="padding:7px 0;font-size:14px;border-bottom:0.5px solid var(--gray-100);color:var(--gray-900);">${item}</div>`).join('');
+    } else {
+      bodyHtml = '<div style="color:var(--gray-400);font-size:14px;padding:8px 0;">Everything needed is already in your pantry!</div>';
+    }
+
+    groceryHtml = `<div class="card" style="margin-top:4px;"><div class="card-title">🛒 Grocery list</div>${bodyHtml}</div>`;
+  }
 
   container.innerHTML = `
     <button class="action-btn" id="suggest-btn" onclick="autoSuggestWeek()">✨ Auto-suggest week</button>

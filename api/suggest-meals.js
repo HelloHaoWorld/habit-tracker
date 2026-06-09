@@ -40,13 +40,16 @@ Return ONLY a valid JSON object, no markdown, no explanation:
       "nutrition_tags": ["protein", "carb", "fat"]
     }
   ],
-  "groceryList": [
-    "Chicken breast (400g)",
-    "Brown rice (2 cups)"
-  ]
+  "groceryList": {
+    "Proteins": ["Chicken breast (400g)", "Eggs (6)"],
+    "Grains & Carbs": ["Brown rice (2 cups)"],
+    "Vegetables & Fruit": ["Cucumber (2)", "Cherry tomatoes (1 punnet)"],
+    "Dairy": ["Cheddar cheese (100g)"],
+    "Pantry & Other": ["Olive oil", "Soy sauce (small bottle)"]
+  }
 }
 
-For groceryList: only include items NOT already in pantry. Be specific with quantities for ${dates.length} lunches. Keep the list practical and consolidated (e.g. combine if same ingredient used multiple days).`;
+Use category names that make sense for the items. Common categories: "Proteins", "Grains & Carbs", "Vegetables & Fruit", "Dairy", "Pantry & Other". Only include a category if it has items. Only include items NOT already in pantry. Be specific with quantities for ${dates.length} lunches. Consolidate duplicates.`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
