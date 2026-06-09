@@ -890,7 +890,7 @@ function renderPlanner(container) {
           ${tagsHtml}
           ${statusHtml}
         </div>
-        <div class="meal-day-rating">${recipe ? '⭐ ' + recipe.ethan_rating : ''}</div>
+        <div class="meal-day-rating">${recipe ? '⭐ ' + (recipe.ethan_rating != null ? recipe.ethan_rating : 'unknown') : ''}</div>
       </div>`;
   }).join('');
 
@@ -951,7 +951,7 @@ async function autoSuggestWeek() {
           ingredients: meal.ingredients,
           nutrition_tags: meal.nutrition_tags || ['protein', 'carb', 'fat'],
           prep_time_minutes: 10,
-          ethan_rating: 3
+          ethan_rating: null
         }).select().single();
         if (!error && inserted) {
           recipes.push(inserted);
@@ -1153,7 +1153,7 @@ function renderRecipes(container) {
       <div class="recipe-card-header">
         <div>
           <div class="recipe-card-name">${r.name}</div>
-          <div class="recipe-card-meta">⏱ ${r.prep_time_minutes} min · ⭐ ${r.ethan_rating}/10</div>
+          <div class="recipe-card-meta">⏱ ${r.prep_time_minutes} min · ⭐ ${r.ethan_rating != null ? r.ethan_rating + '/10' : 'unknown'}</div>
         </div>
         <div style="display:flex;gap:2px;align-items:center;">
           <button onclick="openEditRecipe('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);padding:4px;" title="Edit">
@@ -1289,9 +1289,9 @@ async function saveSelectedSuggestions() {
     const { error } = await db.from('recipes').insert({
       id, name: r.name, ingredients,
       prep_steps: [], prep_time_minutes: r.prep_time_minutes || 15,
-      ethan_rating: 5, nutrition_tags: r.nutrition_tags || [], photo_url: null
+      ethan_rating: null, nutrition_tags: r.nutrition_tags || [], photo_url: null
     });
-    if (!error) recipes.push({ id, name: r.name, description: r.description, ingredients, prep_steps: [], prep_time_minutes: r.prep_time_minutes || 15, ethan_rating: 5, nutrition_tags: r.nutrition_tags || [], photo_url: null });
+    if (!error) recipes.push({ id, name: r.name, description: r.description, ingredients, prep_steps: [], prep_time_minutes: r.prep_time_minutes || 15, ethan_rating: null, nutrition_tags: r.nutrition_tags || [], photo_url: null });
     else failed++;
   }
 
