@@ -381,7 +381,14 @@ function renderHeatmap(goalId) {
     ['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => `<div class="heatmap-day-label">${d}</div>`).join('');
   document.getElementById('legend-skip').style.display = hasSchedule ? 'flex' : 'none';
 
+  // Offset so first cell aligns to its correct day-of-week column
+  const firstDate = new Date();
+  firstDate.setDate(firstDate.getDate() - 29);
+  const offset = firstDate.getDay(); // 0=Su … 6=Sa
+
   let cells = '';
+  for (let j = 0; j < offset; j++) cells += `<div class="heatmap-cell empty"></div>`;
+
   for (let i = 29; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
