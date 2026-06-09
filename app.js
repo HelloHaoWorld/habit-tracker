@@ -1126,9 +1126,14 @@ function renderRecipes(container) {
           <div class="recipe-card-name">${r.name}</div>
           <div class="recipe-card-meta">⏱ ${r.prep_time_minutes} min · ⭐ ${r.ethan_rating}/10</div>
         </div>
-        <button onclick="deleteRecipe('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);padding:4px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-        </button>
+        <div style="display:flex;gap:2px;align-items:center;">
+          <button onclick="openEditRecipe('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);padding:4px;" title="Edit">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button onclick="deleteRecipe('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);padding:4px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+          </button>
+        </div>
       </div>
       <div>${(r.nutrition_tags||[]).map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}</div>
       <div style="margin-top:8px;font-size:13px;color:var(--gray-400)">${(r.ingredients||[]).join(', ')}</div>
@@ -1282,6 +1287,126 @@ async function deleteRecipe(id) {
   await db.from('recipes').delete().eq('id', id);
   recipes = recipes.filter(r => r.id !== id);
   renderMealsPage();
+}
+
+function openEditRecipe(id) {
+  const r = recipes.find(r => r.id === id);
+  if (!r) return;
+  const nameEsc = r.name.replace(/"/g, '&quot;');
+  const ingEsc = (r.ingredients || []).join(', ').replace(/"/g, '&quot;');
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal">
+      <div class="modal-title">Edit recipe</div>
+      <div class="form-group">
+        <label class="form-label">Recipe name</label>
+        <input class="form-input" id="r-name" type="text" value="${nameEsc}"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ingredients (comma separated)</label>
+        <input class="form-input" id="r-ingredients" type="text" value="${ingEsc}"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Prep time (minutes)</label>
+        <input class="form-input" id="r-time" type="number" value="${r.prep_time_minutes}" min="1" max="120"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ethan's rating</label>
+        <div class="star-rating" id="r-stars">
+          ${[1,2,3,4,5,6,7,8,9,10].map(n =>
+            `<span class="star" data-val="${n}" onclick="setStars(${n})">★</span>`
+          ).join('')}
+        </div>
+        <input type="hidden" id="r-rating" value="${r.ethan_rating}"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nutrition coverage</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
+          ${['protein','carb','fat','veggie'].map(t => `
+            <label style="display:flex;align-items:center;gap:6px;font-size:14px;">
+              <input type="checkbox" value="${t}" class="r-nutrition" ${(r.nutrition_tags||[]).includes(t)?'checked':''} style="accent-color:var(--green);width:16px;height:16px;">
+              <span class="nutrition-badge ${t}">${t}</span>
+            </label>`).join('')}
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Photo</label>
+        <div class="photo-upload-area" id="r-photo-preview" onclick="document.getElementById('r-photo-input').click()">
+          ${r.photo_url ? `<img src="${r.photo_url}" style="width:100%;height:100%;object-fit:cover;">` : '<div class="photo-upload-placeholder">📷 Tap to add photo</div>'}
+        </div>
+        <input type="file" id="r-photo-input" accept="image/*" style="display:none" onchange="previewPhoto(this)">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Re-describe to regenerate prep steps (leave blank to keep existing)</label>
+        <textarea class="form-input" id="r-desc" rows="3" placeholder="e.g. Cook pasta, mix with pesto and cherry tomatoes..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
+        <button class="btn-primary" onclick="saveEditRecipe('${id}')">Save changes</button>
+      </div>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+  setStars(r.ethan_rating);
+}
+
+async function saveEditRecipe(id) {
+  const r = recipes.find(r => r.id === id);
+  if (!r) return;
+  const name = document.getElementById('r-name').value.trim();
+  const ingredientsRaw = document.getElementById('r-ingredients').value.trim();
+  const prepTime = parseInt(document.getElementById('r-time').value) || 15;
+  const rating = parseInt(document.getElementById('r-rating').value) || 5;
+  const nutritionTags = [...document.querySelectorAll('.r-nutrition:checked')].map(el => el.value);
+  const desc = document.getElementById('r-desc').value.trim();
+  if (!name) return;
+
+  const saveBtn = document.querySelector('#modal-overlay .btn-primary');
+  saveBtn.disabled = true;
+
+  let prepSteps = r.prep_steps || [];
+  if (desc) {
+    saveBtn.textContent = '⏳ Generating steps...';
+    try {
+      const res = await fetch('/api/generate-steps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description: desc, ingredients: ingredientsRaw })
+      });
+      const data = await res.json();
+      prepSteps = data.steps || [];
+    } catch (e) { console.error('AI step generation failed', e); }
+  } else {
+    saveBtn.textContent = '⏳ Saving...';
+  }
+
+  const ingredients = ingredientsRaw.split(',').map(s => s.trim()).filter(Boolean);
+
+  let photoUrl = r.photo_url;
+  const photoFile = document.getElementById('r-photo-input').files[0];
+  if (photoFile) {
+    const ext = photoFile.name.split('.').pop() || 'jpg';
+    const { error: uploadErr } = await db.storage.from('recipe-photos').upload(`${id}.${ext}`, photoFile, { upsert: true });
+    if (!uploadErr) {
+      const { data } = db.storage.from('recipe-photos').getPublicUrl(`${id}.${ext}`);
+      photoUrl = data.publicUrl;
+    }
+  }
+
+  const { error } = await db.from('recipes').update({
+    name, ingredients, prep_steps: prepSteps,
+    prep_time_minutes: prepTime, ethan_rating: rating,
+    nutrition_tags: nutritionTags, photo_url: photoUrl
+  }).eq('id', id);
+
+  if (!error) {
+    const idx = recipes.findIndex(r => r.id === id);
+    if (idx !== -1) recipes[idx] = { ...recipes[idx], name, ingredients, prep_steps: prepSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, photo_url: photoUrl };
+    closeMealModal();
+    renderMealsPage();
+  } else {
+    alert('Failed to save: ' + JSON.stringify(error));
+    saveBtn.textContent = 'Save changes';
+    saveBtn.disabled = false;
+  }
 }
 
 // ─── Pantry tab ───────────────────────────────────────────────────────────────
