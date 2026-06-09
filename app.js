@@ -844,6 +844,20 @@ function getMissingNutrition(meal) {
   return ['protein','carb','fat','veggie'].filter(n => !covered.includes(n));
 }
 
+function getPantryStatus(recipe) {
+  if (!recipe || !(recipe.ingredients || []).length || !pantryItems.length) return null;
+  const pantryNames = pantryItems.map(p => p.name.toLowerCase());
+  const missingCount = (recipe.ingredients).filter(ing => {
+    const ingClean = ing.toLowerCase().replace(/\([^)]*\)/g, '').trim();
+    return !pantryNames.some(p => {
+      const pc = p.toLowerCase();
+      return pc.includes(ingClean) || ingClean.includes(pc) ||
+        pc.split(/\s+/).every(w => ingClean.includes(w));
+    });
+  }).length;
+  return { total: recipe.ingredients.length, missing: missingCount };
+}
+
 function renderPlanner(container) {
   const dates = getWeekDates();
   const dayLabels = ['Mon','Tue','Wed','Thu','Fri'];
@@ -851,15 +865,29 @@ function renderPlanner(container) {
   const rows = dates.map((date, i) => {
     const meal = mealPlan[date];
     const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
-    const missing = getMissingNutrition(meal);
-    const warningHtml = missing.length
-      ? `<span class="nutrition-badge missing">missing ${missing.join(', ')}</span>` : '';
+
+    let tagsHtml = '';
+    let statusHtml = '';
+    if (recipe) {
+      const tags = recipe.nutrition_tags || [];
+      tagsHtml = tags.length
+        ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;">${tags.map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}</div>`
+        : '';
+      const ps = getPantryStatus(recipe);
+      if (ps) {
+        statusHtml = ps.missing === 0
+          ? `<div style="margin-top:5px;font-size:11px;font-weight:600;color:var(--green);">✓ All in pantry</div>`
+          : `<div style="margin-top:5px;font-size:11px;font-weight:600;color:#f59e0b;">🛒 ${ps.missing} ingredient${ps.missing > 1 ? 's' : ''} needed</div>`;
+      }
+    }
+
     return `
       <div class="meal-day-card" onclick="openMealPicker('${date}')">
         <div class="meal-day-label">${dayLabels[i]}</div>
-        <div>
+        <div style="flex:1;min-width:0;">
           <div class="meal-day-name">${recipe ? recipe.name : '<span style="color:var(--gray-200)">Unplanned</span>'}</div>
-          ${warningHtml}
+          ${tagsHtml}
+          ${statusHtml}
         </div>
         <div class="meal-day-rating">${recipe ? '⭐ ' + recipe.ethan_rating : ''}</div>
       </div>`;

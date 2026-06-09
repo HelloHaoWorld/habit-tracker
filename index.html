@@ -162,10 +162,10 @@
     .meals-subnav { display:flex; gap:6px; margin-bottom:16px; background:var(--gray-100); padding:4px; border-radius:var(--radius-md); }
     .subnav-btn { flex:1; padding:8px; border:none; background:none; border-radius:var(--radius-sm); font-size:13px; font-weight:500; color:var(--gray-400); cursor:pointer; font-family:inherit; transition:all 0.15s; }
     .subnav-btn.active { background:white; color:var(--gray-900); box-shadow:0 1px 3px rgba(0,0,0,0.08); }
-    .meal-day-card { background:white; border-radius:var(--radius-lg); border:0.5px solid var(--gray-200); padding:14px 16px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
-    .meal-day-label { font-size:13px; font-weight:600; color:var(--gray-400); min-width:36px; }
-    .meal-day-name { font-size:14px; font-weight:500; flex:1; padding:0 12px; }
-    .meal-day-rating { font-size:12px; color:var(--gray-400); }
+    .meal-day-card { background:white; border-radius:var(--radius-lg); border:0.5px solid var(--gray-200); padding:14px 16px; margin-bottom:10px; display:flex; align-items:flex-start; gap:12px; }
+    .meal-day-label { font-size:13px; font-weight:600; color:var(--gray-400); min-width:36px; padding-top:2px; flex-shrink:0; }
+    .meal-day-name { font-size:14px; font-weight:500; }
+    .meal-day-rating { font-size:12px; color:var(--gray-400); white-space:nowrap; padding-top:2px; flex-shrink:0; }
     .nutrition-badge { display:inline-block; font-size:11px; padding:2px 8px; border-radius:20px; margin:2px; }
     .nutrition-badge.protein { background:#FEF3C7; color:#92400E; }
     .nutrition-badge.carb    { background:#E0E7FF; color:#3730A3; }
