@@ -1279,19 +1279,22 @@ async function saveSelectedSuggestions() {
   const btn = document.querySelector('#modal-overlay .btn-primary');
   btn.textContent = '⏳ Saving…'; btn.disabled = true;
 
+  let failed = 0;
   for (const r of picked) {
-    const id = 'recipe-' + Date.now() + Math.random().toString(36).slice(2, 5);
+    const id = 'recipe-' + Date.now() + Math.random().toString(36).slice(2, 7);
     const ingredients = Array.isArray(r.ingredients) ? r.ingredients : (r.ingredients||'').split(',').map(s => s.trim()).filter(Boolean);
     const { error } = await db.from('recipes').insert({
-      id, name: r.name, description: r.description, ingredients,
+      id, name: r.name, ingredients,
       prep_steps: [], prep_time_minutes: r.prep_time_minutes || 15,
       ethan_rating: 5, nutrition_tags: r.nutrition_tags || [], photo_url: null
     });
     if (!error) recipes.push({ id, name: r.name, description: r.description, ingredients, prep_steps: [], prep_time_minutes: r.prep_time_minutes || 15, ethan_rating: 5, nutrition_tags: r.nutrition_tags || [], photo_url: null });
+    else failed++;
   }
 
   closeMealModal();
   renderMealsPage();
+  if (failed) alert(`${failed} recipe(s) could not be saved. Please try again.`);
 }
 
 function openAddRecipe() {
