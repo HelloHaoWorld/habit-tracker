@@ -1355,12 +1355,15 @@ function openAddRecipe() {
       </div>
       <div class="form-group">
         <label class="form-label">Ethan's rating</label>
-        <div class="star-rating" id="r-stars">
-          ${[1,2,3,4,5,6,7,8,9,10].map(n =>
-            `<span class="star" data-val="${n}" onclick="setStars(${n})">★</span>`
-          ).join('')}
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="star-rating" id="r-stars">
+            ${[1,2,3,4,5,6,7,8,9,10].map(n =>
+              `<span class="star" data-val="${n}" onclick="setStars(${n})">★</span>`
+            ).join('')}
+          </div>
+          <button type="button" class="not-sure-btn" onclick="setStars(null)">Unknown</button>
         </div>
-        <input type="hidden" id="r-rating" value="5"/>
+        <input type="hidden" id="r-rating" value=""/>
       </div>
       <div class="form-group">
         <label class="form-label">Nutrition coverage</label>
@@ -1389,7 +1392,7 @@ function openAddRecipe() {
       </div>
     </div>`;
   document.getElementById('modal-overlay').classList.add('open');
-  setStars(5);
+  setStars(null);
 }
 
 function previewPhoto(input) {
@@ -1401,17 +1404,21 @@ function previewPhoto(input) {
 }
 
 function setStars(val) {
-  document.getElementById('r-rating').value = val;
+  const isEmpty = val === null || val === undefined || val === '';
+  document.getElementById('r-rating').value = isEmpty ? '' : val;
   document.querySelectorAll('.star').forEach(s => {
-    s.classList.toggle('active', parseInt(s.dataset.val) <= val);
+    s.classList.toggle('active', !isEmpty && parseInt(s.dataset.val) <= val);
   });
+  const nsBtn = document.querySelector('.not-sure-btn');
+  if (nsBtn) nsBtn.classList.toggle('active', isEmpty);
 }
 
 async function saveRecipeWithAI() {
   const name = document.getElementById('r-name').value.trim();
   const ingredientsRaw = document.getElementById('r-ingredients').value.trim();
   const prepTime = parseInt(document.getElementById('r-time').value) || 15;
-  const rating = parseInt(document.getElementById('r-rating').value) || 5;
+  const ratingRaw = document.getElementById('r-rating').value;
+  const rating = ratingRaw === '' ? null : parseInt(ratingRaw);
   const nutritionTags = [...document.querySelectorAll('.r-nutrition:checked')].map(el => el.value);
   const desc = document.getElementById('r-desc').value.trim();
   if (!name) return;
@@ -1496,12 +1503,15 @@ function openEditRecipe(id) {
       </div>
       <div class="form-group">
         <label class="form-label">Ethan's rating</label>
-        <div class="star-rating" id="r-stars">
-          ${[1,2,3,4,5,6,7,8,9,10].map(n =>
-            `<span class="star" data-val="${n}" onclick="setStars(${n})">★</span>`
-          ).join('')}
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="star-rating" id="r-stars">
+            ${[1,2,3,4,5,6,7,8,9,10].map(n =>
+              `<span class="star" data-val="${n}" onclick="setStars(${n})">★</span>`
+            ).join('')}
+          </div>
+          <button type="button" class="not-sure-btn" onclick="setStars(null)">Unknown</button>
         </div>
-        <input type="hidden" id="r-rating" value="${r.ethan_rating}"/>
+        <input type="hidden" id="r-rating" value="${r.ethan_rating ?? ''}"/>
       </div>
       <div class="form-group">
         <label class="form-label">Nutrition coverage</label>
@@ -1539,7 +1549,8 @@ async function saveEditRecipe(id) {
   const name = document.getElementById('r-name').value.trim();
   const ingredientsRaw = document.getElementById('r-ingredients').value.trim();
   const prepTime = parseInt(document.getElementById('r-time').value) || 15;
-  const rating = parseInt(document.getElementById('r-rating').value) || 5;
+  const ratingRaw = document.getElementById('r-rating').value;
+  const rating = ratingRaw === '' ? null : parseInt(ratingRaw);
   const nutritionTags = [...document.querySelectorAll('.r-nutrition:checked')].map(el => el.value);
   const desc = document.getElementById('r-desc').value.trim();
   if (!name) return;
