@@ -761,6 +761,7 @@ db.auth.onAuthStateChange((event, session) => {
 let recipes = [];
 let pantryItems = [];
 let mealPlan = {};
+let suggestedRecipesCache = [];
 let currentMealsTab = 'planner';
 let weekGroceryList = null;
 
@@ -1176,9 +1177,121 @@ function renderRecipes(container) {
     </div>`).join('');
 
   container.innerHTML = `
-    <button class="action-btn" onclick="openAddRecipe()">+ Add recipe</button>
+    <div style="display:flex;gap:8px;margin-bottom:4px;">
+      <button class="action-btn" style="flex:1" onclick="openSuggestRecipe()">✨ Suggest</button>
+      <button class="action-btn" style="flex:1" onclick="openAddRecipe()">+ Add manually</button>
+    </div>
     ${cards || '<div class="empty"><div class="empty-icon">🍱</div>No recipes yet</div>'}
   `;
+}
+
+// ─── Suggest recipe flow ──────────────────────────────────────────────────────
+
+function openSuggestRecipe() {
+  const chips = (category, options) => `
+    <div class="form-group">
+      <label class="form-label">${category} <span style="font-weight:400;color:var(--gray-400);">(optional)</span></label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+        ${options.map(o => `<button type="button" class="suggest-chip" data-cat="${category.toLowerCase()}" onclick="toggleSuggestChip(this)">${o}</button>`).join('')}
+      </div>
+    </div>`;
+
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal">
+      <div class="modal-title">✨ Suggest recipe</div>
+      ${chips('Protein', ['Chicken','Egg','Tuna','Cheese','Tofu','Beans','Salmon','Ham'])}
+      ${chips('Carb', ['Rice','Pasta','Bread','Tortilla','Quinoa','Noodles'])}
+      ${chips('Veggie', ['Cucumber','Carrot','Broccoli','Spinach','Tomato','Corn','Edamame'])}
+      <div class="form-group">
+        <label class="form-label">Keywords / style <span style="font-weight:400;color:var(--gray-400);">(optional)</span></label>
+        <input class="form-input" id="suggest-keyword" type="text" placeholder="e.g. Japanese, no-heat, quick, Mediterranean…"/>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
+        <button class="btn-primary" onclick="findSuggestedRecipes()">Find recipes →</button>
+      </div>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function toggleSuggestChip(btn) {
+  const cat = btn.dataset.cat;
+  document.querySelectorAll(`.suggest-chip[data-cat="${cat}"]`).forEach(c => {
+    if (c !== btn) c.classList.remove('active');
+  });
+  btn.classList.toggle('active');
+}
+
+async function findSuggestedRecipes() {
+  const get = cat => document.querySelector(`.suggest-chip[data-cat="${cat}"].active`)?.textContent.trim() || null;
+  const protein = get('protein'), carb = get('carb'), veggie = get('veggie');
+  const keyword = document.getElementById('suggest-keyword')?.value.trim() || '';
+
+  const btn = document.querySelector('#modal-overlay .btn-primary');
+  btn.textContent = '⏳ Finding…'; btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/suggest-recipes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ protein, carb, veggie, keyword, existingRecipes: recipes })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    suggestedRecipesCache = data.recipes || [];
+    showSuggestionResults();
+  } catch (err) {
+    alert('Could not get suggestions: ' + err.message);
+    btn.textContent = 'Find recipes →'; btn.disabled = false;
+  }
+}
+
+function showSuggestionResults() {
+  const cards = suggestedRecipesCache.map((r, i) => `
+    <label style="display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:0.5px solid var(--gray-100);cursor:pointer;">
+      <input type="checkbox" class="suggest-pick" data-index="${i}" style="margin-top:2px;accent-color:var(--green);width:18px;height:18px;flex-shrink:0;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:15px;font-weight:600;color:var(--gray-900);">${r.name}</div>
+        <div style="font-size:13px;color:var(--gray-500);margin:3px 0 5px;">${r.description || ''}</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-bottom:6px;">${(r.ingredients||[]).join(', ')}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">${(r.nutrition_tags||[]).map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}</div>
+      </div>
+    </label>`).join('');
+
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal">
+      <div class="modal-title">Pick recipes to save</div>
+      <div style="font-size:13px;color:var(--gray-400);margin-bottom:4px;">Select the ones you want to add to your recipe book</div>
+      ${cards || '<div style="color:var(--gray-400);padding:20px 0;text-align:center;">No suggestions returned — try different filters</div>'}
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="openSuggestRecipe()">← Back</button>
+        <button class="btn-primary" onclick="saveSelectedSuggestions()">Save selected</button>
+      </div>
+    </div>`;
+}
+
+async function saveSelectedSuggestions() {
+  const picked = [...document.querySelectorAll('.suggest-pick:checked')]
+    .map(el => suggestedRecipesCache[parseInt(el.dataset.index)])
+    .filter(Boolean);
+  if (!picked.length) { alert('Select at least one recipe to save.'); return; }
+
+  const btn = document.querySelector('#modal-overlay .btn-primary');
+  btn.textContent = '⏳ Saving…'; btn.disabled = true;
+
+  for (const r of picked) {
+    const id = 'recipe-' + Date.now() + Math.random().toString(36).slice(2, 5);
+    const ingredients = Array.isArray(r.ingredients) ? r.ingredients : (r.ingredients||'').split(',').map(s => s.trim()).filter(Boolean);
+    const { error } = await db.from('recipes').insert({
+      id, name: r.name, description: r.description, ingredients,
+      prep_steps: [], prep_time_minutes: r.prep_time_minutes || 15,
+      ethan_rating: 5, nutrition_tags: r.nutrition_tags || [], photo_url: null
+    });
+    if (!error) recipes.push({ id, name: r.name, description: r.description, ingredients, prep_steps: [], prep_time_minutes: r.prep_time_minutes || 15, ethan_rating: 5, nutrition_tags: r.nutrition_tags || [], photo_url: null });
+  }
+
+  closeMealModal();
+  renderMealsPage();
 }
 
 function openAddRecipe() {
