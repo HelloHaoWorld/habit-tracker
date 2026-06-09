@@ -124,6 +124,10 @@
     .modal-actions { display:flex; gap:10px; margin-top:18px; }
     .btn-primary { flex:1; padding:13px; background:var(--green); color:white; border:none; border-radius:var(--radius-md); font-size:15px; font-weight:500; cursor:pointer; font-family:inherit; }
     .btn-secondary { flex:1; padding:13px; background:var(--gray-100); color:var(--gray-600); border:none; border-radius:var(--radius-md); font-size:15px; cursor:pointer; font-family:inherit; }
+    .btn-danger { flex:1; padding:13px; background:#ef4444; color:white; border:none; border-radius:var(--radius-md); font-size:15px; font-weight:500; cursor:pointer; font-family:inherit; }
+    #dialog-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:200; align-items:center; justify-content:center; padding:20px; }
+    #dialog-overlay.open { display:flex; }
+    #dialog-overlay .modal { border-radius:var(--radius-lg); padding:24px 20px 20px; max-width:320px; width:100%; }
 
     .goal-picker-trigger { display:flex; align-items:center; justify-content:space-between; width:100%; padding:14px 18px; border-radius:var(--radius-lg); border:1.5px solid var(--green); background:white; font-family:inherit; color:var(--gray-900); cursor:pointer; text-align:left; box-shadow:0 2px 12px rgba(29,158,117,0.15); }
     .goal-picker-trigger-inner { flex:1; }
@@ -322,6 +326,7 @@
   </div>
 </div>
 
+<div id="dialog-overlay"></div>
 <script src="app.js"></script>
 </body>
 </html>

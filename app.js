@@ -28,10 +28,11 @@ async function signInWithGoogle() {
   });
 }
 
-async function signOut() {
-  if (!confirm('Sign out?')) return;
-  await db.auth.signOut();
-  location.reload();
+function signOut() {
+  showConfirm('Sign out?', async () => {
+    await db.auth.signOut();
+    location.reload();
+  }, { confirmLabel: 'Sign out' });
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -123,7 +124,7 @@ async function log(goalId, value) {
 
   if (error) {
     console.error(error);
-    alert('Failed to save. Please try again.');
+    showAlert('Failed to save. Please try again.');
   } else {
     if (!logs[goalId]) logs[goalId] = {};
     logs[goalId][date] = { success: value, logged_by: name };
@@ -303,18 +304,19 @@ function selectHabit(goalId) {
   renderStatsPage();
 }
 
-async function deleteHabitFromStats(event, id) {
+function deleteHabitFromStats(event, id) {
   event.stopPropagation();
   const goal = goals.find(g => g.id === id);
-  if (!confirm(`Delete "${goal?.name || 'this habit'}" and all its logged data?\n\nThis cannot be undone.`)) return;
-  habitPickerOpen = false;
-  await db.from('logs').delete().eq('goal_id', id);
-  await db.from('goals').delete().eq('id', id);
-  goals = goals.filter(g => g.id !== id);
-  delete logs[id];
-  delete insightsCache[id];
-  if (selectedGoalId === id) selectedGoalId = goals[0]?.id ?? null;
-  renderStatsPage();
+  showConfirm(`Delete "${goal?.name || 'this habit'}" and all its logged data? This cannot be undone.`, async () => {
+    habitPickerOpen = false;
+    await db.from('logs').delete().eq('goal_id', id);
+    await db.from('goals').delete().eq('id', id);
+    goals = goals.filter(g => g.id !== id);
+    delete logs[id];
+    delete insightsCache[id];
+    if (selectedGoalId === id) selectedGoalId = goals[0]?.id ?? null;
+    renderStatsPage();
+  }, { danger: true, confirmLabel: 'Delete' });
 }
 
 function openEditHabit(event, id) {
@@ -347,7 +349,7 @@ async function saveEditGoal(id) {
   if (!name) { document.getElementById('input-name').focus(); return; }
 
   const { error } = await db.from('goals').update({ name, description, emoji, schedule }).eq('id', id);
-  if (error) { alert('Failed to save changes.'); return; }
+  if (error) { showAlert('Failed to save changes.'); return; }
 
   const goal = goals.find(g => g.id === id);
   if (goal) Object.assign(goal, { name, description, emoji, schedule });
@@ -470,12 +472,13 @@ function renderGoalsPage() {
     </div>`).join('');
 }
 
-async function deleteGoal(id) {
-  if (!confirm('Delete this goal and all its data?')) return;
-  await db.from('goals').delete().eq('id', id);
-  goals = goals.filter(g => g.id !== id);
-  delete logs[id];
-  renderGoalsPage();
+function deleteGoal(id) {
+  showConfirm('Delete this goal and all its data?', async () => {
+    await db.from('goals').delete().eq('id', id);
+    goals = goals.filter(g => g.id !== id);
+    delete logs[id];
+    renderGoalsPage();
+  }, { danger: true, confirmLabel: 'Delete' });
 }
 
 // ─── Add Goal Modal ───────────────────────────────────────────────────────────
@@ -927,7 +930,7 @@ function renderPlanner(container) {
 
 async function autoSuggestWeek() {
   const dates = getRemainingWeekDates();
-  if (!dates.length) { alert('No remaining weekdays this week!'); return; }
+  if (!dates.length) { showAlert('No remaining weekdays this week!'); return; }
 
   const btn = document.getElementById('suggest-btn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Suggesting…'; }
@@ -970,7 +973,7 @@ async function autoSuggestWeek() {
 
     weekGroceryList = data.groceryList || null;
   } catch (err) {
-    alert('Could not suggest meals: ' + err.message);
+    showAlert('Could not suggest meals: ' + err.message);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '✨ Auto-suggest week'; }
   }
@@ -1072,7 +1075,7 @@ async function saveProfile() {
     { onConflict: 'user_id' }
   );
 
-  if (error) { alert('Failed to save name. Please try again.'); return; }
+  if (error) { showAlert('Failed to save name. Please try again.'); return; }
 
   userProfile = { ...userProfile, display_name: name };
   document.getElementById('avatar-btn').textContent = name;
@@ -1100,6 +1103,40 @@ function closeMealModal() {
         <button class="btn-primary" onclick="saveGoal()">Add habit</button>
       </div>
     </div>`;
+}
+
+// ─── Dialog helpers ───────────────────────────────────────────────────────────
+
+let _pendingConfirm = null;
+
+function showAlert(message) {
+  const el = document.getElementById('dialog-overlay');
+  el.innerHTML = `
+    <div class="modal">
+      <div style="font-size:15px;color:var(--gray-700);line-height:1.5;margin-bottom:4px;">${message}</div>
+      <div class="modal-actions"><button class="btn-primary" onclick="closeDialog()">OK</button></div>
+    </div>`;
+  el.classList.add('open');
+}
+
+function showConfirm(message, onConfirm, { danger = false, confirmLabel = 'Confirm' } = {}) {
+  _pendingConfirm = onConfirm;
+  const el = document.getElementById('dialog-overlay');
+  el.innerHTML = `
+    <div class="modal">
+      <div style="font-size:15px;color:var(--gray-700);line-height:1.5;margin-bottom:4px;">${message}</div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeDialog()">Cancel</button>
+        <button class="${danger ? 'btn-danger' : 'btn-primary'}" onclick="closeDialog(true)">${confirmLabel}</button>
+      </div>
+    </div>`;
+  el.classList.add('open');
+}
+
+function closeDialog(confirmed) {
+  document.getElementById('dialog-overlay').classList.remove('open');
+  if (confirmed && _pendingConfirm) _pendingConfirm();
+  _pendingConfirm = null;
 }
 
 // ─── Prep tab ─────────────────────────────────────────────────────────────────
@@ -1241,7 +1278,7 @@ async function findSuggestedRecipes() {
     suggestedRecipesCache = data.recipes || [];
     showSuggestionResults();
   } catch (err) {
-    alert('Could not get suggestions: ' + err.message);
+    showAlert('Could not get suggestions: ' + err.message);
     btn.textContent = 'Find recipes →'; btn.disabled = false;
   }
 }
@@ -1277,7 +1314,7 @@ async function saveSelectedSuggestions() {
   const picked = [...document.querySelectorAll('.suggest-pick:checked')]
     .map(el => suggestedRecipesCache[parseInt(el.dataset.index)])
     .filter(Boolean);
-  if (!picked.length) { alert('Select at least one recipe to save.'); return; }
+  if (!picked.length) { showAlert('Select at least one recipe to save.'); return; }
 
   const btn = document.querySelector('#modal-overlay .btn-primary');
   btn.textContent = '⏳ Saving…'; btn.disabled = true;
@@ -1297,7 +1334,7 @@ async function saveSelectedSuggestions() {
 
   closeMealModal();
   renderMealsPage();
-  if (failed) alert(`${failed} recipe(s) could not be saved. Please try again.`);
+  if (failed) showAlert(`${failed} recipe(s) could not be saved. Please try again.`);
 }
 
 function openAddRecipe() {
@@ -1423,17 +1460,18 @@ async function saveRecipeWithAI() {
     closeMealModal();
     renderMealsPage();
   } else {
-    alert('Failed to save recipe: ' + JSON.stringify(error));
+    showAlert('Failed to save recipe: ' + JSON.stringify(error));
     saveBtn.textContent = '✨ Generate & save';
     saveBtn.disabled = false;
   }
 }
 
-async function deleteRecipe(id) {
-  if (!confirm('Delete this recipe?')) return;
-  await db.from('recipes').delete().eq('id', id);
-  recipes = recipes.filter(r => r.id !== id);
-  renderMealsPage();
+function deleteRecipe(id) {
+  showConfirm('Delete this recipe?', async () => {
+    await db.from('recipes').delete().eq('id', id);
+    recipes = recipes.filter(r => r.id !== id);
+    renderMealsPage();
+  }, { danger: true, confirmLabel: 'Delete' });
 }
 
 function openEditRecipe(id) {
@@ -1550,7 +1588,7 @@ async function saveEditRecipe(id) {
     closeMealModal();
     renderMealsPage();
   } else {
-    alert('Failed to save: ' + JSON.stringify(error));
+    showAlert('Failed to save: ' + JSON.stringify(error));
     saveBtn.textContent = 'Save changes';
     saveBtn.disabled = false;
   }
@@ -1615,11 +1653,12 @@ async function savePantryItem() {
   }
 }
 
-async function deletePantryItem(id) {
-  if (!confirm('Delete this item?')) return;
-  await db.from('pantry_items').delete().eq('id', id);
-  pantryItems = pantryItems.filter(p => p.id !== id);
-  renderMealsPage();
+function deletePantryItem(id) {
+  showConfirm('Delete this item?', async () => {
+    await db.from('pantry_items').delete().eq('id', id);
+    pantryItems = pantryItems.filter(p => p.id !== id);
+    renderMealsPage();
+  }, { danger: true, confirmLabel: 'Delete' });
 }
 
 init();
