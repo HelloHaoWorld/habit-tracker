@@ -767,6 +767,7 @@ let mealPlan = {};
 let suggestedRecipesCache = [];
 let currentMealsTab = 'planner';
 let weekGroceryList = null;
+let recipeAvoidUntil = JSON.parse(localStorage.getItem('recipeAvoidUntil') || '{}');
 
 // ─── Meals data loading ───────────────────────────────────────────────────────
 
@@ -862,38 +863,82 @@ function getPantryStatus(recipe) {
   return { total: recipe.ingredients.length, missing: missingCount };
 }
 
+function isRecipeAvoided(recipeId) {
+  return recipeAvoidUntil[recipeId] && recipeAvoidUntil[recipeId] > todayKey();
+}
+
+function formatPlannerDate(dateStr) {
+  const [, m, d] = dateStr.split('-').map(Number);
+  return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1] + ' ' + d;
+}
+
+function getSuggestForNutrient(nutrient) {
+  const match = pantryItems.find(p => (p.nutrition_tags || []).includes(nutrient));
+  if (match) return match.name;
+  return { protein: 'egg or cheese', carb: 'crackers or rice', veggie: 'cucumber or carrot', fat: 'nuts or avocado' }[nutrient] || nutrient;
+}
+
 function renderPlanner(container) {
   const dates = getWeekDates();
   const dayLabels = ['Mon','Tue','Wed','Thu','Fri'];
+  const today = todayKey();
 
   const rows = dates.map((date, i) => {
     const meal = mealPlan[date];
     const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
+    const isPast = date < today;
 
-    let tagsHtml = '';
+    // Bento box nutrient rows
+    let bentoHtml = '';
+    if (recipe) {
+      const covered = new Set(getMealNutrition(meal));
+      const nutrientIcons = { protein: '🥩', carb: '🍚', veggie: '🥦' };
+      bentoHtml = `<div class="bento-grid">` +
+        ['protein', 'carb', 'veggie'].map(n => {
+          if (covered.has(n)) {
+            return `<div class="bento-row covered"><span>${nutrientIcons[n]}</span><span class="bento-row-label">${n}</span><span class="bento-covered-mark">✓</span></div>`;
+          }
+          return `<div class="bento-row missing"><span>${nutrientIcons[n]}</span><span class="bento-row-label">${n}</span><span class="bento-hint">+ ${getSuggestForNutrient(n)}</span></div>`;
+        }).join('') +
+        `</div>`;
+    }
+
+    // Pantry status
     let statusHtml = '';
     if (recipe) {
-      const tags = recipe.nutrition_tags || [];
-      tagsHtml = tags.length
-        ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;">${tags.map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}</div>`
-        : '';
       const ps = getPantryStatus(recipe);
       if (ps) {
         statusHtml = ps.missing === 0
-          ? `<div style="margin-top:5px;font-size:11px;font-weight:600;color:var(--green);">✓ All in pantry</div>`
-          : `<div style="margin-top:5px;font-size:11px;font-weight:600;color:#f59e0b;">🛒 ${ps.missing} ingredient${ps.missing > 1 ? 's' : ''} needed</div>`;
+          ? `<div style="font-size:11px;font-weight:600;color:var(--green);">✓ All in pantry</div>`
+          : `<div style="font-size:11px;font-weight:600;color:#f59e0b;">🛒 ${ps.missing} ingredient${ps.missing > 1 ? 's' : ''} needed</div>`;
       }
+    }
+
+    // Recipe display: past + has recipe → show "?" feedback button
+    let recipeHtml;
+    if (isPast && recipe) {
+      recipeHtml = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <button class="bento-question" onclick="event.stopPropagation();openEatFeedback('${date}')">?</button>
+        <span style="font-size:13px;color:var(--gray-400);">${recipe.name}</span>
+      </div>`;
+    } else if (recipe) {
+      recipeHtml = `<div class="meal-day-name">${recipe.name}</div>`;
+    } else {
+      recipeHtml = `<div class="meal-day-name" style="color:var(--gray-300);">Unplanned</div>`;
     }
 
     return `
       <div class="meal-day-card" onclick="openMealPicker('${date}')">
-        <div class="meal-day-label">${dayLabels[i]}</div>
-        <div style="flex:1;min-width:0;">
-          <div class="meal-day-name">${recipe ? recipe.name : '<span style="color:var(--gray-200)">Unplanned</span>'}</div>
-          ${tagsHtml}
-          ${statusHtml}
+        <div class="meal-day-header">
+          <div>
+            <span class="meal-day-label">${dayLabels[i]}</span>
+            <span class="meal-day-date">${formatPlannerDate(date)}</span>
+          </div>
+          ${recipe ? `<span class="meal-day-rating">⭐ ${recipe.ethan_rating != null ? recipe.ethan_rating + '/10' : 'unknown'}</span>` : ''}
         </div>
-        <div class="meal-day-rating">${recipe ? '⭐ ' + (recipe.ethan_rating != null ? recipe.ethan_rating : 'unknown') : ''}</div>
+        ${recipeHtml}
+        ${bentoHtml}
+        ${statusHtml}
       </div>`;
   }).join('');
 
@@ -939,7 +984,7 @@ async function autoSuggestWeek() {
     const res = await fetch('/api/suggest-meals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recipes, pantryItems, dates })
+      body: JSON.stringify({ recipes: recipes.filter(r => !isRecipeAvoided(r.id)), pantryItems, dates })
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
@@ -1029,6 +1074,100 @@ async function saveMealPick(date) {
     { onConflict: 'date' }
   );
   if (!error) mealPlan[date] = { id, date, recipe_id: recipeId, pantry_item_ids: checkedPantry, confirmed: true };
+  closeMealModal();
+  renderMealsPage();
+}
+
+// ─── Eat feedback flow ────────────────────────────────────────────────────────
+
+function openEatFeedback(date) {
+  const meal = mealPlan[date];
+  const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
+  if (!recipe) return;
+  const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(date + 'T12:00:00').getDay()];
+
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal">
+      <div class="modal-title">How did lunch go?</div>
+      <div style="font-size:12px;color:var(--gray-400);margin:-10px 0 16px;">${dayName} · ${formatPlannerDate(date)}</div>
+      <div style="font-size:15px;font-weight:600;color:var(--gray-900);margin-bottom:16px;">🍱 ${recipe.name}</div>
+      <div style="font-size:13px;font-weight:500;color:var(--gray-600);margin-bottom:10px;">Did Ethan have this?</div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeMealModal()">Something else</button>
+        <button class="btn-primary" onclick="showEatAmountPicker('${date}')">Yes 👍</button>
+      </div>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function showEatAmountPicker(date) {
+  const meal = mealPlan[date];
+  const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
+  if (!recipe) return;
+
+  const levels = [
+    { label: 'None',    pct: 0,   emoji: '😞' },
+    { label: 'A little', pct: 0.2, emoji: '😐' },
+    { label: 'Half',    pct: 0.5, emoji: '🙂' },
+    { label: 'Most',    pct: 0.8, emoji: '😊' },
+    { label: 'All!',    pct: 1.0, emoji: '🤩' },
+  ];
+
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal">
+      <div class="modal-title">How much did Ethan eat?</div>
+      <div style="font-size:13px;color:var(--gray-400);margin:-10px 0 16px;">🍱 ${recipe.name}</div>
+      <div style="display:flex;gap:6px;margin-bottom:20px;">
+        ${levels.map(l => `
+          <button class="eat-level-btn" data-pct="${l.pct}" onclick="selectEatLevel(this)">
+            <div style="font-size:20px;margin-bottom:3px;">${l.emoji}</div>
+            <div>${l.label}</div>
+          </button>`).join('')}
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="openEatFeedback('${date}')">← Back</button>
+        <button class="btn-primary" id="eat-save-btn" onclick="saveEatFeedback('${date}')" disabled>Save</button>
+      </div>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function selectEatLevel(btn) {
+  document.querySelectorAll('.eat-level-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('eat-save-btn').disabled = false;
+}
+
+async function saveEatFeedback(date) {
+  const meal = mealPlan[date];
+  const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
+  if (!recipe) return;
+
+  const activeBtn = document.querySelector('.eat-level-btn.active');
+  if (!activeBtn) return;
+  const pct = parseFloat(activeBtn.dataset.pct);
+
+  // Calculate new rating
+  const curr = recipe.ethan_rating;
+  let newRating;
+  if (curr == null) {
+    newRating = Math.max(1, Math.round(pct * 10));
+  } else {
+    const delta = pct >= 0.8 ? 2 : pct >= 0.5 ? 0 : pct >= 0.2 ? -2 : -3;
+    newRating = Math.max(1, Math.min(10, curr + delta));
+  }
+
+  const { error } = await db.from('recipes').update({ ethan_rating: newRating }).eq('id', recipe.id);
+  if (!error) {
+    recipe.ethan_rating = newRating;
+    if (newRating < 2) {
+      const avoidDate = new Date();
+      avoidDate.setDate(avoidDate.getDate() + 14);
+      recipeAvoidUntil[recipe.id] = dateKey(avoidDate);
+      localStorage.setItem('recipeAvoidUntil', JSON.stringify(recipeAvoidUntil));
+    }
+  }
+
   closeMealModal();
   renderMealsPage();
 }

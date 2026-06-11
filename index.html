@@ -168,10 +168,23 @@
     .meals-subnav { display:flex; gap:6px; margin-bottom:16px; background:var(--gray-100); padding:4px; border-radius:var(--radius-md); }
     .subnav-btn { flex:1; padding:8px; border:none; background:none; border-radius:var(--radius-sm); font-size:13px; font-weight:500; color:var(--gray-400); cursor:pointer; font-family:inherit; transition:all 0.15s; }
     .subnav-btn.active { background:white; color:var(--gray-900); box-shadow:0 1px 3px rgba(0,0,0,0.08); }
-    .meal-day-card { background:white; border-radius:var(--radius-lg); border:0.5px solid var(--gray-200); padding:14px 16px; margin-bottom:10px; display:flex; align-items:flex-start; gap:12px; }
-    .meal-day-label { font-size:13px; font-weight:600; color:var(--gray-400); min-width:36px; padding-top:2px; flex-shrink:0; }
-    .meal-day-name { font-size:14px; font-weight:500; }
-    .meal-day-rating { font-size:12px; color:var(--gray-400); white-space:nowrap; padding-top:2px; flex-shrink:0; }
+    .meal-day-card { background:white; border-radius:var(--radius-lg); border:0.5px solid var(--gray-200); padding:14px 16px; margin-bottom:10px; cursor:pointer; }
+    .meal-day-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .meal-day-label { font-size:13px; font-weight:700; color:var(--green); text-transform:uppercase; letter-spacing:0.4px; }
+    .meal-day-date { font-size:12px; color:var(--gray-400); margin-left:5px; }
+    .meal-day-name { font-size:15px; font-weight:600; color:var(--gray-900); margin-bottom:8px; }
+    .meal-day-rating { font-size:12px; color:var(--gray-400); }
+    .bento-grid { border:0.5px solid var(--gray-100); border-radius:8px; overflow:hidden; margin:8px 0 4px; }
+    .bento-row { display:flex; align-items:center; gap:8px; padding:6px 10px; font-size:13px; color:var(--gray-700); }
+    .bento-row + .bento-row { border-top:0.5px solid var(--gray-100); }
+    .bento-row.covered { background:#f0fdf4; }
+    .bento-row.missing { background:#fffbeb; }
+    .bento-row-label { text-transform:capitalize; flex:1; }
+    .bento-covered-mark { font-size:11px; font-weight:700; color:var(--green); }
+    .bento-hint { font-size:11px; color:#d97706; }
+    .bento-question { background:none; border:1.5px solid #f59e0b; color:#d97706; border-radius:6px; padding:1px 8px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; line-height:1.6; }
+    .eat-level-btn { flex:1; padding:8px 4px; background:var(--gray-100); color:var(--gray-600); border:none; border-radius:var(--radius-sm); font-size:12px; cursor:pointer; font-family:inherit; text-align:center; transition:all 0.15s; }
+    .eat-level-btn.active { background:var(--green); color:white; }
     .nutrition-badge { display:inline-block; font-size:11px; padding:2px 8px; border-radius:20px; margin:2px; }
     .nutrition-badge.protein { background:#FEF3C7; color:#92400E; }
     .nutrition-badge.carb    { background:#E0E7FF; color:#3730A3; }
