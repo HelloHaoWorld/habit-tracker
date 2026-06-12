@@ -770,6 +770,7 @@ let mealPlan = {};
 let suggestedRecipesCache = [];
 let currentMealsTab = 'planner';
 let weekGroceryList = null;
+let plannerWeeks = 1;
 
 // ─── Meals data loading ───────────────────────────────────────────────────────
 
@@ -812,15 +813,17 @@ function switchMealsTab(tab, btn) {
 
 // ─── Planner tab ──────────────────────────────────────────────────────────────
 
-function getWeekDates() {
+function getWeekDates(numWeeks = plannerWeeks) {
   const dates = [];
   const now = new Date();
   const monday = new Date(now);
   monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    dates.push(dateKey(d));
+  for (let w = 0; w < numWeeks; w++) {
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + w * 7 + i);
+      dates.push(dateKey(d));
+    }
   }
   return dates;
 }
@@ -828,6 +831,11 @@ function getWeekDates() {
 function getRemainingWeekDates() {
   const today = todayKey();
   return getWeekDates().filter(d => d >= today);
+}
+
+function switchPlannerWeeks(n) {
+  plannerWeeks = n;
+  renderMealsPage();
 }
 
 function getMealNutrition(meal) {
@@ -885,8 +893,11 @@ function renderPlanner(container) {
   const dates = getWeekDates();
   const dayLabels = ['Mon','Tue','Wed','Thu','Fri'];
   const today = todayKey();
+  const weekLabels = ['This week', 'Next week', 'In 2 weeks', 'In 3 weeks'];
 
   const rows = dates.map((date, i) => {
+    const weekIndex = Math.floor(i / 5);
+    const dayIndex = i % 5;
     const meal = mealPlan[date];
     const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
     const isPast = date < today;
@@ -926,12 +937,16 @@ function renderPlanner(container) {
       recipeHtml = `<div class="meal-day-name" style="color:var(--gray-300);">Unplanned</div>`;
     }
 
+    const weekHeader = dayIndex === 0
+      ? `<div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.6px;margin:${weekIndex === 0 ? '0' : '16px'} 0 8px;">${weekLabels[weekIndex]}</div>`
+      : '';
+
     if (isPast) {
-      return `
+      return weekHeader + `
         <div class="meal-day-card" style="opacity:0.55;cursor:pointer;" onclick="togglePastDay('${date}')">
           <div class="meal-day-header">
             <div>
-              <span class="meal-day-label" style="color:var(--gray-400);">${dayLabels[i]}</span>
+              <span class="meal-day-label" style="color:var(--gray-400);">${dayLabels[dayIndex]}</span>
               <span class="meal-day-date">${formatPlannerDate(date)}</span>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
@@ -947,11 +962,11 @@ function renderPlanner(container) {
         </div>`;
     }
 
-    return `
+    return weekHeader + `
       <div class="meal-day-card" onclick="openMealPicker('${date}')">
         <div class="meal-day-header">
           <div>
-            <span class="meal-day-label">${dayLabels[i]}</span>
+            <span class="meal-day-label">${dayLabels[dayIndex]}</span>
             <span class="meal-day-date">${formatPlannerDate(date)}</span>
           </div>
           ${recipe ? `<span class="meal-day-rating">⭐ ${recipe.ethan_rating != null ? recipe.ethan_rating + '/10' : 'unknown'}</span>` : ''}
@@ -985,7 +1000,15 @@ function renderPlanner(container) {
   }
 
   container.innerHTML = `
-    <button class="action-btn" id="suggest-btn" onclick="autoSuggestWeek()">✨ Auto-suggest week</button>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">
+      <button class="action-btn" id="suggest-btn" style="flex:1" onclick="autoSuggestWeek()">✨ Auto-suggest week</button>
+      <select onchange="switchPlannerWeeks(parseInt(this.value))" style="padding:9px 10px;border-radius:var(--radius-md);border:0.5px solid var(--gray-200);background:white;font-size:13px;color:var(--gray-700);font-family:inherit;cursor:pointer;">
+        <option value="1" ${plannerWeeks===1?'selected':''}>This week</option>
+        <option value="2" ${plannerWeeks===2?'selected':''}>+ 1 week</option>
+        <option value="3" ${plannerWeeks===3?'selected':''}>+ 2 weeks</option>
+        <option value="4" ${plannerWeeks===4?'selected':''}>+ 3 weeks</option>
+      </select>
+    </div>
     ${rows}
     ${groceryHtml}
   `;
