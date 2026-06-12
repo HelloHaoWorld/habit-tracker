@@ -771,6 +771,7 @@ let suggestedRecipesCache = [];
 let currentMealsTab = 'planner';
 let weekGroceryList = null;
 let plannerWeeks = parseInt(localStorage.getItem('plannerWeeks') || '1', 10); // 1–3 only
+let collapsedWeeks = new Set(JSON.parse(localStorage.getItem('collapsedWeeks') || '[]'));
 
 // ─── Meals data loading ───────────────────────────────────────────────────────
 
@@ -904,14 +905,11 @@ function renderPlanner(container) {
   const today = todayKey();
   const weekLabels = ['This week', 'Next week', 'In 2 weeks', 'In 3 weeks'];
 
-  const rows = dates.map((date, i) => {
-    const weekIndex = Math.floor(i / 5);
-    const dayIndex = i % 5;
+  function buildDayCard(date, dayIndex, weekIndex) {
     const meal = mealPlan[date];
     const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
     const isPast = date < today;
 
-    // Bento box nutrient row
     let bentoHtml = '';
     if (recipe) {
       const covered = new Set(getMealNutrition(meal));
@@ -922,11 +920,9 @@ function renderPlanner(container) {
       bentoHtml = `<div class="bento-row">${badges}<span style="margin-left:4px;font-size:15px;">${allNutrients ? '👍' : '👎'}</span></div>`;
     }
 
-    // Pantry items in this meal
     const mealPantryItems = (meal?.pantry_item_ids || [])
       .map(id => pantryItems.find(p => p.id === id)).filter(Boolean);
 
-    // Pantry status (missing ingredients)
     let statusHtml = '';
     if (recipe) {
       const ps = getPantryStatus(recipe);
@@ -937,7 +933,6 @@ function renderPlanner(container) {
       }
     }
 
-    // Bento contents: recipe + pantry items
     const pantryItemsHtml = mealPantryItems.length
       ? `<div style="font-size:12px;color:var(--gray-400);margin-top:3px;">+ ${mealPantryItems.map(p => {
           const c = nutrientTextColor(p.nutrition_tags);
@@ -945,7 +940,6 @@ function renderPlanner(container) {
         }).join(' · ')}</div>`
       : '';
 
-    // Recipe display
     let recipeHtml;
     if (isPast && recipe) {
       recipeHtml = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
@@ -958,12 +952,8 @@ function renderPlanner(container) {
       recipeHtml = `<div class="meal-day-name" style="color:var(--gray-300);">Unplanned</div>`;
     }
 
-    const weekHeader = dayIndex === 0
-      ? `<div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.6px;margin:${weekIndex === 0 ? '0' : '16px'} 0 8px;">${weekLabels[weekIndex]}</div>`
-      : '';
-
     if (isPast) {
-      return weekHeader + `
+      return `
         <div class="meal-day-card" style="opacity:0.55;cursor:pointer;" onclick="togglePastDay('${date}')">
           <div class="meal-day-header">
             <div>
@@ -983,7 +973,7 @@ function renderPlanner(container) {
         </div>`;
     }
 
-    return weekHeader + `
+    return `
       <div class="meal-day-card" onclick="openMealPicker('${date}')">
         <div class="meal-day-header">
           <div>
@@ -995,6 +985,24 @@ function renderPlanner(container) {
         ${recipeHtml}
         ${bentoHtml}
         ${statusHtml}
+      </div>`;
+  }
+
+  // Group dates by week and build collapsible week sections
+  const rows = Array.from({ length: plannerWeeks }, (_, weekIndex) => {
+    const weekDates = dates.slice(weekIndex * 5, (weekIndex + 1) * 5);
+    const isCollapsed = collapsedWeeks.has(weekIndex);
+    const daysHtml = weekDates.map((date, dayIndex) => buildDayCard(date, dayIndex, weekIndex)).join('');
+    const topMargin = weekIndex === 0 ? '0' : '4px';
+    return `
+      <div style="margin-top:${topMargin};">
+        <div onclick="toggleWeek(${weekIndex})" style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px;cursor:pointer;user-select:none;">
+          <span style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.6px;">${weekLabels[weekIndex]}</span>
+          <span id="week-chevron-${weekIndex}" style="font-size:11px;color:var(--gray-400);">${isCollapsed ? '▶' : '▼'}</span>
+        </div>
+        <div id="week-body-${weekIndex}" style="${isCollapsed ? 'display:none;' : ''}">
+          ${daysHtml}
+        </div>
       </div>`;
   }).join('');
 
@@ -1041,6 +1049,17 @@ function togglePastDay(date) {
   const opening = detail.style.display === 'none';
   detail.style.display = opening ? '' : 'none';
   if (chevron) chevron.textContent = opening ? '▼' : '▶';
+}
+
+function toggleWeek(weekIndex) {
+  const body = document.getElementById('week-body-' + weekIndex);
+  const chevron = document.getElementById('week-chevron-' + weekIndex);
+  if (!body) return;
+  const closing = body.style.display !== 'none';
+  body.style.display = closing ? 'none' : '';
+  if (chevron) chevron.textContent = closing ? '▶' : '▼';
+  if (closing) collapsedWeeks.add(weekIndex); else collapsedWeeks.delete(weekIndex);
+  localStorage.setItem('collapsedWeeks', JSON.stringify([...collapsedWeeks]));
 }
 
 // ─── Auto-suggest ─────────────────────────────────────────────────────────────
