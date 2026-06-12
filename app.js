@@ -913,7 +913,11 @@ function renderPlanner(container) {
       bentoHtml = `<div class="bento-row">${badges}<span style="margin-left:4px;font-size:15px;">${allNutrients ? '👍' : '👎'}</span></div>`;
     }
 
-    // Pantry status
+    // Pantry items in this meal
+    const mealPantryItems = (meal?.pantry_item_ids || [])
+      .map(id => pantryItems.find(p => p.id === id)).filter(Boolean);
+
+    // Pantry status (missing ingredients)
     let statusHtml = '';
     if (recipe) {
       const ps = getPantryStatus(recipe);
@@ -924,15 +928,20 @@ function renderPlanner(container) {
       }
     }
 
+    // Bento contents: recipe + pantry items
+    const pantryItemsHtml = mealPantryItems.length
+      ? `<div style="font-size:12px;color:var(--gray-400);margin-top:3px;">+ ${mealPantryItems.map(p => p.name).join(' · ')}</div>`
+      : '';
+
     // Recipe display
     let recipeHtml;
     if (isPast && recipe) {
-      recipeHtml = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      recipeHtml = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
         <button class="bento-question" onclick="event.stopPropagation();openEatFeedback('${date}')">?</button>
         <span style="font-size:13px;color:var(--gray-400);">${recipe.name}</span>
-      </div>`;
+      </div>${pantryItemsHtml}`;
     } else if (recipe) {
-      recipeHtml = `<div class="meal-day-name">${recipe.name}</div>`;
+      recipeHtml = `<div class="meal-day-name" style="margin-bottom:2px;">${recipe.name}</div>${pantryItemsHtml}`;
     } else {
       recipeHtml = `<div class="meal-day-name" style="color:var(--gray-300);">Unplanned</div>`;
     }
