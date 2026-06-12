@@ -926,11 +926,32 @@ function renderPlanner(container) {
       recipeHtml = `<div class="meal-day-name" style="color:var(--gray-300);">Unplanned</div>`;
     }
 
+    if (isPast) {
+      return `
+        <div class="meal-day-card" style="opacity:0.55;cursor:pointer;" onclick="togglePastDay('${date}')">
+          <div class="meal-day-header">
+            <div>
+              <span class="meal-day-label" style="color:var(--gray-400);">${dayLabels[i]}</span>
+              <span class="meal-day-date">${formatPlannerDate(date)}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              ${recipe ? `<span class="meal-day-rating">⭐ ${recipe.ethan_rating != null ? recipe.ethan_rating + '/10' : 'unknown'}</span>` : ''}
+              <span id="chevron-${date}" style="font-size:11px;color:var(--gray-400);">▶</span>
+            </div>
+          </div>
+          <div id="past-detail-${date}" style="display:none;">
+            ${recipeHtml}
+            ${bentoHtml}
+            ${statusHtml}
+          </div>
+        </div>`;
+    }
+
     return `
-      <div class="meal-day-card" ${isPast ? 'style="opacity:0.55;cursor:default;"' : `onclick="openMealPicker('${date}')"`}>
+      <div class="meal-day-card" onclick="openMealPicker('${date}')">
         <div class="meal-day-header">
           <div>
-            <span class="meal-day-label" ${isPast ? 'style="color:var(--gray-400);"' : ''}>${dayLabels[i]}</span>
+            <span class="meal-day-label">${dayLabels[i]}</span>
             <span class="meal-day-date">${formatPlannerDate(date)}</span>
           </div>
           ${recipe ? `<span class="meal-day-rating">⭐ ${recipe.ethan_rating != null ? recipe.ethan_rating + '/10' : 'unknown'}</span>` : ''}
@@ -968,6 +989,15 @@ function renderPlanner(container) {
     ${rows}
     ${groceryHtml}
   `;
+}
+
+function togglePastDay(date) {
+  const detail = document.getElementById('past-detail-' + date);
+  const chevron = document.getElementById('chevron-' + date);
+  if (!detail) return;
+  const opening = detail.style.display === 'none';
+  detail.style.display = opening ? '' : 'none';
+  if (chevron) chevron.textContent = opening ? '▼' : '▶';
 }
 
 // ─── Auto-suggest ─────────────────────────────────────────────────────────────
