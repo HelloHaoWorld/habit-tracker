@@ -895,11 +895,11 @@ function renderPlanner(container) {
     let bentoHtml = '';
     if (recipe) {
       const covered = new Set(getMealNutrition(meal));
-      const anyNutrient = covered.has('protein') || covered.has('carb') || covered.has('fiber');
+      const allNutrients = covered.has('protein') && covered.has('carb') && covered.has('fiber');
       const badges = ['protein', 'carb', 'fiber'].map(n =>
         `<span class="nutrition-badge ${n}" style="${covered.has(n) ? '' : 'opacity:0.3;'}">${n}</span>`
       ).join('');
-      bentoHtml = `<div class="bento-row">${badges}<span style="margin-left:4px;font-size:15px;">${anyNutrient ? '👍' : '👎'}</span></div>`;
+      bentoHtml = `<div class="bento-row">${badges}<span style="margin-left:4px;font-size:15px;">${allNutrients ? '👍' : '👎'}</span></div>`;
     }
 
     // Pantry status
