@@ -767,7 +767,6 @@ let mealPlan = {};
 let suggestedRecipesCache = [];
 let currentMealsTab = 'planner';
 let weekGroceryList = null;
-let recipeAvoidUntil = JSON.parse(localStorage.getItem('recipeAvoidUntil') || '{}');
 
 // ─── Meals data loading ───────────────────────────────────────────────────────
 
@@ -864,7 +863,8 @@ function getPantryStatus(recipe) {
 }
 
 function isRecipeAvoided(recipeId) {
-  return recipeAvoidUntil[recipeId] && recipeAvoidUntil[recipeId] > todayKey();
+  const r = recipes.find(r => r.id === recipeId);
+  return r?.avoid_until && r.avoid_until > todayKey();
 }
 
 function formatPlannerDate(dateStr) {
@@ -1157,15 +1157,16 @@ async function saveEatFeedback(date) {
     newRating = Math.max(1, Math.min(10, curr + delta));
   }
 
-  const { error } = await db.from('recipes').update({ ethan_rating: newRating }).eq('id', recipe.id);
+  const updates = { ethan_rating: newRating };
+  if (newRating < 2) {
+    const avoidDate = new Date();
+    avoidDate.setDate(avoidDate.getDate() + 14);
+    updates.avoid_until = dateKey(avoidDate);
+  }
+  const { error } = await db.from('recipes').update(updates).eq('id', recipe.id);
   if (!error) {
     recipe.ethan_rating = newRating;
-    if (newRating < 2) {
-      const avoidDate = new Date();
-      avoidDate.setDate(avoidDate.getDate() + 14);
-      recipeAvoidUntil[recipe.id] = dateKey(avoidDate);
-      localStorage.setItem('recipeAvoidUntil', JSON.stringify(recipeAvoidUntil));
-    }
+    if (updates.avoid_until) recipe.avoid_until = updates.avoid_until;
   }
 
   closeMealModal();
