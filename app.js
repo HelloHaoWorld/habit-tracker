@@ -888,19 +888,15 @@ function renderPlanner(container) {
     const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
     const isPast = date < today;
 
-    // Bento box nutrient rows
+    // Bento box nutrient row
     let bentoHtml = '';
     if (recipe) {
       const covered = new Set(getMealNutrition(meal));
-      const nutrientIcons = { protein: '🥩', carb: '🍚', veggie: '🥦' };
-      bentoHtml = `<div class="bento-grid">` +
-        ['protein', 'carb', 'veggie'].map(n => {
-          if (covered.has(n)) {
-            return `<div class="bento-row covered"><span>${nutrientIcons[n]}</span><span class="bento-row-label">${n}</span><span class="bento-covered-mark">✓</span></div>`;
-          }
-          return `<div class="bento-row missing"><span>${nutrientIcons[n]}</span><span class="bento-row-label">${n}</span><span class="bento-hint">+ ${getSuggestForNutrient(n)}</span></div>`;
-        }).join('') +
-        `</div>`;
+      const anyNutrient = covered.has('protein') || covered.has('carb') || covered.has('veggie');
+      const badges = ['protein', 'carb', 'veggie'].map(n =>
+        `<span class="nutrition-badge ${n}" style="${covered.has(n) ? '' : 'opacity:0.3;'}">${n}</span>`
+      ).join('');
+      bentoHtml = `<div class="bento-row">${badges}<span style="margin-left:4px;font-size:15px;">${anyNutrient ? '👍' : '👎'}</span></div>`;
     }
 
     // Pantry status
