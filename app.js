@@ -910,7 +910,7 @@ function renderPlanner(container) {
       }
     }
 
-    // Recipe display: past + has recipe → show "?" feedback button
+    // Recipe display
     let recipeHtml;
     if (isPast && recipe) {
       recipeHtml = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
@@ -924,10 +924,10 @@ function renderPlanner(container) {
     }
 
     return `
-      <div class="meal-day-card" onclick="openMealPicker('${date}')">
+      <div class="meal-day-card" ${isPast ? 'style="opacity:0.55;cursor:default;"' : `onclick="openMealPicker('${date}')"`}>
         <div class="meal-day-header">
           <div>
-            <span class="meal-day-label">${dayLabels[i]}</span>
+            <span class="meal-day-label" ${isPast ? 'style="color:var(--gray-400);"' : ''}>${dayLabels[i]}</span>
             <span class="meal-day-date">${formatPlannerDate(date)}</span>
           </div>
           ${recipe ? `<span class="meal-day-rating">⭐ ${recipe.ethan_rating != null ? recipe.ethan_rating + '/10' : 'unknown'}</span>` : ''}
