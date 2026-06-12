@@ -1322,9 +1322,8 @@ function toggleStep(checkbox) {
 function renderRecipes(container) {
   const cards = recipes.map(r => `
     <div class="recipe-card">
-      ${r.photo_url ? `<img class="recipe-photo" src="${r.photo_url}" alt="${r.name}">` : ''}
       <div class="recipe-card-header">
-        <div>
+        <div style="flex:1;min-width:0;">
           <div class="recipe-card-name">${r.name}</div>
           <div class="recipe-card-meta">⏱ ${r.prep_time_minutes} min · ⭐ ${r.ethan_rating != null ? r.ethan_rating + '/10' : 'unknown'}</div>
         </div>
@@ -1336,6 +1335,7 @@ function renderRecipes(container) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
           </button>
         </div>
+        ${r.photo_url ? `<img class="recipe-thumb" src="${r.photo_url}" alt="${r.name}">` : ''}
       </div>
       <div>${(r.nutrition_tags||[]).map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}</div>
       <div style="margin-top:8px;font-size:13px;color:var(--gray-400)">${(r.ingredients||[]).join(', ')}</div>
