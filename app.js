@@ -770,7 +770,7 @@ let mealPlan = {};
 let suggestedRecipesCache = [];
 let currentMealsTab = 'planner';
 let weekGroceryList = null;
-let plannerWeeks = 1;
+let plannerWeeks = 1; // 1–3 only
 
 // ─── Meals data loading ───────────────────────────────────────────────────────
 
@@ -834,7 +834,7 @@ function getRemainingWeekDates() {
 }
 
 function switchPlannerWeeks(n) {
-  plannerWeeks = n;
+  plannerWeeks = Math.min(3, Math.max(1, n));
   renderMealsPage();
 }
 
@@ -1000,13 +1000,12 @@ function renderPlanner(container) {
   }
 
   container.innerHTML = `
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">
-      <button class="action-btn" id="suggest-btn" style="flex:1" onclick="autoSuggestWeek()">✨ Auto-suggest week</button>
-      <select onchange="switchPlannerWeeks(parseInt(this.value))" style="padding:9px 10px;border-radius:var(--radius-md);border:0.5px solid var(--gray-200);background:white;font-size:13px;color:var(--gray-700);font-family:inherit;cursor:pointer;">
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="action-btn" id="suggest-btn" style="flex:1;margin-bottom:0;" onclick="autoSuggestWeek()">✨ Auto-suggest week</button>
+      <select onchange="switchPlannerWeeks(parseInt(this.value))" style="padding:13px 12px;border-radius:var(--radius-md);border:none;background:var(--gray-100);color:var(--gray-600);font-size:15px;font-weight:500;font-family:inherit;cursor:pointer;flex-shrink:0;">
         <option value="1" ${plannerWeeks===1?'selected':''}>This week</option>
         <option value="2" ${plannerWeeks===2?'selected':''}>+ 1 week</option>
         <option value="3" ${plannerWeeks===3?'selected':''}>+ 2 weeks</option>
-        <option value="4" ${plannerWeeks===4?'selected':''}>+ 3 weeks</option>
       </select>
     </div>
     ${rows}
