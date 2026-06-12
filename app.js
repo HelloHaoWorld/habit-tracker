@@ -1750,9 +1750,14 @@ function renderPantry(container) {
         <div class="goal-item-name">${p.name}</div>
         <div style="margin-top:4px">${(p.nutrition_tags||[]).map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}</div>
       </div>
-      <button onclick="deletePantryItem('${p.id}')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);padding:6px;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-      </button>
+      <div style="display:flex;gap:2px;align-items:center;">
+        <button onclick="openEditPantryItem('${p.id}')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);padding:6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button onclick="deletePantryItem('${p.id}')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);padding:6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+        </button>
+      </div>
     </div>`).join('');
 
   container.innerHTML = `
@@ -1795,6 +1800,47 @@ async function savePantryItem() {
   const { error } = await db.from('pantry_items').insert({ id, name, nutrition_tags: nutritionTags });
   if (!error) {
     pantryItems.push({ id, name, nutrition_tags: nutritionTags });
+    closeMealModal();
+    renderMealsPage();
+  }
+}
+
+function openEditPantryItem(id) {
+  const p = pantryItems.find(p => p.id === id);
+  if (!p) return;
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal">
+      <div class="modal-title">Edit pantry item</div>
+      <div class="form-group">
+        <label class="form-label">Item name</label>
+        <input class="form-input" id="p-name" type="text" value="${p.name}" placeholder="e.g. Apple, Cheese stick"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nutrition category</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
+          ${['protein','carb','fat','fiber'].map(t => `
+            <label style="display:flex;align-items:center;gap:6px;font-size:14px;">
+              <input type="checkbox" value="${t}" class="p-nutrition" ${(p.nutrition_tags||[]).includes(t) ? 'checked' : ''} style="accent-color:var(--green);width:16px;height:16px;">
+              <span class="nutrition-badge ${t}">${t}</span>
+            </label>`).join('')}
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
+        <button class="btn-primary" onclick="saveEditPantryItem('${id}')">Save</button>
+      </div>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+async function saveEditPantryItem(id) {
+  const name = document.getElementById('p-name').value.trim();
+  const nutritionTags = [...document.querySelectorAll('.p-nutrition:checked')].map(el => el.value);
+  if (!name) return;
+  const { error } = await db.from('pantry_items').update({ name, nutrition_tags: nutritionTags }).eq('id', id);
+  if (!error) {
+    const idx = pantryItems.findIndex(p => p.id === id);
+    if (idx !== -1) pantryItems[idx] = { ...pantryItems[idx], name, nutrition_tags: nutritionTags };
     closeMealModal();
     renderMealsPage();
   }
