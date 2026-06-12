@@ -845,7 +845,7 @@ function getMealNutrition(meal) {
 
 function getMissingNutrition(meal) {
   const covered = getMealNutrition(meal);
-  return ['protein','carb','fat','veggie'].filter(n => !covered.includes(n));
+  return ['protein','carb','fat','fiber'].filter(n => !covered.includes(n));
 }
 
 function getPantryStatus(recipe) {
@@ -875,7 +875,7 @@ function formatPlannerDate(dateStr) {
 function getSuggestForNutrient(nutrient) {
   const match = pantryItems.find(p => (p.nutrition_tags || []).includes(nutrient));
   if (match) return match.name;
-  return { protein: 'egg or cheese', carb: 'crackers or rice', veggie: 'cucumber or carrot', fat: 'nuts or avocado' }[nutrient] || nutrient;
+  return { protein: 'egg or cheese', carb: 'crackers or rice', fiber: 'cucumber or carrot', fat: 'nuts or avocado' }[nutrient] || nutrient;
 }
 
 function renderPlanner(container) {
@@ -892,8 +892,8 @@ function renderPlanner(container) {
     let bentoHtml = '';
     if (recipe) {
       const covered = new Set(getMealNutrition(meal));
-      const anyNutrient = covered.has('protein') || covered.has('carb') || covered.has('veggie');
-      const badges = ['protein', 'carb', 'veggie'].map(n =>
+      const anyNutrient = covered.has('protein') || covered.has('carb') || covered.has('fiber');
+      const badges = ['protein', 'carb', 'fiber'].map(n =>
         `<span class="nutrition-badge ${n}" style="${covered.has(n) ? '' : 'opacity:0.3;'}">${n}</span>`
       ).join('');
       bentoHtml = `<div class="bento-row">${badges}<span style="margin-left:4px;font-size:15px;">${anyNutrient ? '👍' : '👎'}</span></div>`;
@@ -1374,7 +1374,7 @@ function openSuggestRecipe() {
       <div class="modal-title">✨ Suggest recipe</div>
       ${chips('Protein', ['Chicken','Egg','Tuna','Cheese','Tofu','Beans','Salmon','Ham','Pork','Lamb','Beef'])}
       ${chips('Carb', ['Rice','Pasta','Bread','Tortilla','Quinoa','Noodles'])}
-      ${chips('Veggie', ['Cucumber','Carrot','Broccoli','Spinach','Tomato','Corn','Edamame'])}
+      ${chips('Fiber', ['Cucumber','Carrot','Broccoli','Spinach','Tomato','Corn','Edamame'])}
       <div class="form-group">
         <label class="form-label">Keywords / style <span style="font-weight:400;color:var(--gray-400);">(optional)</span></label>
         <input class="form-input" id="suggest-keyword" type="text" placeholder="e.g. Japanese, no-heat, quick, Mediterranean…"/>
@@ -1397,7 +1397,7 @@ function toggleSuggestChip(btn) {
 
 async function findSuggestedRecipes() {
   const get = cat => document.querySelector(`.suggest-chip[data-cat="${cat}"].active`)?.textContent.trim() || null;
-  const protein = get('protein'), carb = get('carb'), veggie = get('veggie');
+  const protein = get('protein'), carb = get('carb'), fiber = get('fiber');
   const keyword = document.getElementById('suggest-keyword')?.value.trim() || '';
 
   const btn = document.querySelector('#modal-overlay .btn-primary');
@@ -1407,7 +1407,7 @@ async function findSuggestedRecipes() {
     const res = await fetch('/api/suggest-recipes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ protein, carb, veggie, keyword, existingRecipes: recipes })
+      body: JSON.stringify({ protein, carb, fiber, keyword, existingRecipes: recipes })
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
@@ -1504,7 +1504,7 @@ function openAddRecipe() {
       <div class="form-group">
         <label class="form-label">Nutrition coverage</label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
-          ${['protein','carb','fat','veggie'].map(t => `
+          ${['protein','carb','fat','fiber'].map(t => `
             <label style="display:flex;align-items:center;gap:6px;font-size:14px;">
               <input type="checkbox" value="${t}" class="r-nutrition" style="accent-color:var(--green);width:16px;height:16px;">
               <span class="nutrition-badge ${t}">${t}</span>
@@ -1652,7 +1652,7 @@ function openEditRecipe(id) {
       <div class="form-group">
         <label class="form-label">Nutrition coverage</label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
-          ${['protein','carb','fat','veggie'].map(t => `
+          ${['protein','carb','fat','fiber'].map(t => `
             <label style="display:flex;align-items:center;gap:6px;font-size:14px;">
               <input type="checkbox" value="${t}" class="r-nutrition" ${(r.nutrition_tags||[]).includes(t)?'checked':''} style="accent-color:var(--green);width:16px;height:16px;">
               <span class="nutrition-badge ${t}">${t}</span>
@@ -1772,7 +1772,7 @@ function openAddPantryItem() {
       <div class="form-group">
         <label class="form-label">Nutrition category</label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
-          ${['protein','carb','fat','veggie'].map(t => `
+          ${['protein','carb','fat','fiber'].map(t => `
             <label style="display:flex;align-items:center;gap:6px;font-size:14px;">
               <input type="checkbox" value="${t}" class="p-nutrition" style="accent-color:var(--green);width:16px;height:16px;">
               <span class="nutrition-badge ${t}">${t}</span>

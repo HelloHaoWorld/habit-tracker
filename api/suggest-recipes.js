@@ -3,7 +3,7 @@ export const config = { runtime: 'edge' };
 export default async function handler(req) {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
-  const { protein, carb, veggie, keyword, existingRecipes } = await req.json();
+  const { protein, carb, fiber, keyword, existingRecipes } = await req.json();
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return new Response(JSON.stringify({ error: 'API key not set' }), { status: 500 });
@@ -11,7 +11,7 @@ export default async function handler(req) {
   const constraints = [];
   if (protein) constraints.push(`- Protein: must use ${protein}`);
   if (carb)    constraints.push(`- Carb: must use ${carb}`);
-  if (veggie)  constraints.push(`- Veggie: must include ${veggie}`);
+  if (fiber)  constraints.push(`- Fiber: must include ${fiber}`);
   if (keyword) constraints.push(`- Style/theme: ${keyword}`);
 
   const existingNames = (existingRecipes || []).map(r => r.name).join(', ') || 'None';
