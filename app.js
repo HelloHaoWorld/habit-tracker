@@ -856,7 +856,7 @@ function getMealNutrition(meal) {
 
 function getMissingNutrition(meal) {
   const covered = getMealNutrition(meal);
-  return ['protein','carb','fat','fiber'].filter(n => !covered.includes(n));
+  return ['protein','carb','fat','fiber','fruit'].filter(n => !covered.includes(n));
 }
 
 function getPantryStatus(recipe) {
@@ -1571,7 +1571,7 @@ function openAddRecipe() {
       <div class="form-group">
         <label class="form-label">Nutrition coverage</label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
-          ${['protein','carb','fat','fiber'].map(t => `
+          ${['protein','carb','fat','fiber','fruit'].map(t => `
             <label style="display:flex;align-items:center;gap:6px;font-size:14px;">
               <input type="checkbox" value="${t}" class="r-nutrition" style="accent-color:var(--green);width:16px;height:16px;">
               <span class="nutrition-badge ${t}">${t}</span>
@@ -1719,7 +1719,7 @@ function openEditRecipe(id) {
       <div class="form-group">
         <label class="form-label">Nutrition coverage</label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
-          ${['protein','carb','fat','fiber'].map(t => `
+          ${['protein','carb','fat','fiber','fruit'].map(t => `
             <label style="display:flex;align-items:center;gap:6px;font-size:14px;">
               <input type="checkbox" value="${t}" class="r-nutrition" ${(r.nutrition_tags||[]).includes(t)?'checked':''} style="accent-color:var(--green);width:16px;height:16px;">
               <span class="nutrition-badge ${t}">${t}</span>
@@ -1809,7 +1809,7 @@ async function saveEditRecipe(id) {
 }
 
 function nutrientTextColor(tags) {
-  const colors = { protein: '#92400E', carb: '#3730A3', fat: '#9D174D', fiber: '#0F6E56' };
+  const colors = { protein: '#92400E', carb: '#3730A3', fat: '#9D174D', fiber: '#0F6E56', fruit: '#991B1B' };
   return colors[(tags || [])[0]] || '';
 }
 
@@ -1855,7 +1855,7 @@ function openAddPantryItem() {
       <div class="form-group">
         <label class="form-label">Main nutrient</label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
-          ${['protein','carb','fat','fiber'].map(t =>
+          ${['protein','carb','fat','fiber','fruit'].map(t =>
             `<span class="nutrition-badge ${t} p-nutrient-chip" data-nutrient="${t}" onclick="selectMainNutrient(this)" style="padding:5px 14px;font-size:13px;cursor:pointer;opacity:0.35;">${t}</span>`
           ).join('')}
         </div>
@@ -1897,7 +1897,7 @@ function openEditPantryItem(id) {
       <div class="form-group">
         <label class="form-label">Main nutrient</label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
-          ${['protein','carb','fat','fiber'].map(t =>
+          ${['protein','carb','fat','fiber','fruit'].map(t =>
             `<span class="nutrition-badge ${t} p-nutrient-chip" data-nutrient="${t}" onclick="selectMainNutrient(this)" style="padding:5px 14px;font-size:13px;cursor:pointer;opacity:${t === current ? '1' : '0.35'};">${t}</span>`
           ).join('')}
         </div>
