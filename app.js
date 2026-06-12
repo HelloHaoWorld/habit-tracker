@@ -930,7 +930,10 @@ function renderPlanner(container) {
 
     // Bento contents: recipe + pantry items
     const pantryItemsHtml = mealPantryItems.length
-      ? `<div style="font-size:12px;color:var(--gray-400);margin-top:3px;">+ ${mealPantryItems.map(p => p.name).join(' · ')}</div>`
+      ? `<div style="font-size:12px;color:var(--gray-400);margin-top:3px;">+ ${mealPantryItems.map(p => {
+          const c = nutrientTextColor(p.nutrition_tags);
+          return c ? `<span style="color:${c};font-weight:600;">${p.name}</span>` : p.name;
+        }).join(' · ')}</div>`
       : '';
 
     // Recipe display
@@ -1805,13 +1808,24 @@ async function saveEditRecipe(id) {
   }
 }
 
+function nutrientTextColor(tags) {
+  const colors = { protein: '#92400E', carb: '#3730A3', fat: '#9D174D', fiber: '#0F6E56' };
+  return colors[(tags || [])[0]] || '';
+}
+
+function selectMainNutrient(el) {
+  document.querySelectorAll('.p-nutrient-chip').forEach(b => b.style.opacity = '0.35');
+  el.style.opacity = '1';
+  document.getElementById('p-main-nutrient').value = el.dataset.nutrient;
+}
+
 // ─── Pantry tab ───────────────────────────────────────────────────────────────
 
 function renderPantry(container) {
   const items = pantryItems.map(p => `
     <div class="goal-item">
       <div class="goal-info">
-        <div class="goal-item-name">${p.name}</div>
+        <div class="goal-item-name" style="${nutrientTextColor(p.nutrition_tags) ? `color:${nutrientTextColor(p.nutrition_tags)};font-weight:600;` : ''}">${p.name}</div>
         <div style="margin-top:4px">${(p.nutrition_tags||[]).map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}</div>
       </div>
       <div style="display:flex;gap:2px;align-items:center;">
@@ -1839,14 +1853,13 @@ function openAddPantryItem() {
         <input class="form-input" id="p-name" type="text" placeholder="e.g. Apple, Cheese stick"/>
       </div>
       <div class="form-group">
-        <label class="form-label">Nutrition category</label>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
-          ${['protein','carb','fat','fiber'].map(t => `
-            <label style="display:flex;align-items:center;gap:6px;font-size:14px;">
-              <input type="checkbox" value="${t}" class="p-nutrition" style="accent-color:var(--green);width:16px;height:16px;">
-              <span class="nutrition-badge ${t}">${t}</span>
-            </label>`).join('')}
+        <label class="form-label">Main nutrient</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
+          ${['protein','carb','fat','fiber'].map(t =>
+            `<span class="nutrition-badge ${t} p-nutrient-chip" data-nutrient="${t}" onclick="selectMainNutrient(this)" style="padding:5px 14px;font-size:13px;cursor:pointer;opacity:0.35;">${t}</span>`
+          ).join('')}
         </div>
+        <input type="hidden" id="p-main-nutrient" value=""/>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
@@ -1858,7 +1871,8 @@ function openAddPantryItem() {
 
 async function savePantryItem() {
   const name = document.getElementById('p-name').value.trim();
-  const nutritionTags = [...document.querySelectorAll('.p-nutrition:checked')].map(el => el.value);
+  const main = document.getElementById('p-main-nutrient').value;
+  const nutritionTags = main ? [main] : [];
   if (!name) return;
   const id = 'pantry-' + Date.now();
   const { error } = await db.from('pantry_items').insert({ id, name, nutrition_tags: nutritionTags });
@@ -1872,6 +1886,7 @@ async function savePantryItem() {
 function openEditPantryItem(id) {
   const p = pantryItems.find(p => p.id === id);
   if (!p) return;
+  const current = (p.nutrition_tags || [])[0] || '';
   document.getElementById('modal-overlay').innerHTML = `
     <div class="modal">
       <div class="modal-title">Edit pantry item</div>
@@ -1880,14 +1895,13 @@ function openEditPantryItem(id) {
         <input class="form-input" id="p-name" type="text" value="${p.name}" placeholder="e.g. Apple, Cheese stick"/>
       </div>
       <div class="form-group">
-        <label class="form-label">Nutrition category</label>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
-          ${['protein','carb','fat','fiber'].map(t => `
-            <label style="display:flex;align-items:center;gap:6px;font-size:14px;">
-              <input type="checkbox" value="${t}" class="p-nutrition" ${(p.nutrition_tags||[]).includes(t) ? 'checked' : ''} style="accent-color:var(--green);width:16px;height:16px;">
-              <span class="nutrition-badge ${t}">${t}</span>
-            </label>`).join('')}
+        <label class="form-label">Main nutrient</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
+          ${['protein','carb','fat','fiber'].map(t =>
+            `<span class="nutrition-badge ${t} p-nutrient-chip" data-nutrient="${t}" onclick="selectMainNutrient(this)" style="padding:5px 14px;font-size:13px;cursor:pointer;opacity:${t === current ? '1' : '0.35'};">${t}</span>`
+          ).join('')}
         </div>
+        <input type="hidden" id="p-main-nutrient" value="${current}"/>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
@@ -1899,7 +1913,8 @@ function openEditPantryItem(id) {
 
 async function saveEditPantryItem(id) {
   const name = document.getElementById('p-name').value.trim();
-  const nutritionTags = [...document.querySelectorAll('.p-nutrition:checked')].map(el => el.value);
+  const main = document.getElementById('p-main-nutrient').value;
+  const nutritionTags = main ? [main] : [];
   if (!name) return;
   const { error } = await db.from('pantry_items').update({ name, nutrition_tags: nutritionTags }).eq('id', id);
   if (!error) {
