@@ -770,7 +770,7 @@ let mealPlan = {};
 let suggestedRecipesCache = [];
 let currentMealsTab = 'planner';
 let weekGroceryList = null;
-let plannerWeeks = 1; // 1–3 only
+let plannerWeeks = parseInt(localStorage.getItem('plannerWeeks') || '1', 10); // 1–3 only
 
 // ─── Meals data loading ───────────────────────────────────────────────────────
 
@@ -789,6 +789,14 @@ async function loadMealPlan() {
   if (!error) {
     mealPlan = {};
     for (const row of data) mealPlan[row.date] = row;
+    // Auto-expand planner if saved meals exist beyond the current week view
+    const today = dateKey(new Date());
+    const week1End = getWeekDates(1).at(-1);
+    const week2End = getWeekDates(2).at(-1);
+    const hasMealsBeyondWeek1 = Object.keys(mealPlan).some(d => d > week1End && d > today);
+    const hasMealsBeyondWeek2 = Object.keys(mealPlan).some(d => d > week2End && d > today);
+    if (hasMealsBeyondWeek2 && plannerWeeks < 3) plannerWeeks = 3;
+    else if (hasMealsBeyondWeek1 && plannerWeeks < 2) plannerWeeks = 2;
   }
 }
 
@@ -835,6 +843,7 @@ function getRemainingWeekDates() {
 
 function switchPlannerWeeks(n) {
   plannerWeeks = Math.min(3, Math.max(1, n));
+  localStorage.setItem('plannerWeeks', plannerWeeks);
   renderMealsPage();
 }
 
