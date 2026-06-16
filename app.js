@@ -770,6 +770,8 @@ let mealPlan = {};
 let suggestedRecipesCache = [];
 let currentMealsTab = 'planner';
 let weekGroceryList = null;
+let recipeSort = 'name'; // 'name' | 'rating' | 'time'
+let recipeFilters = new Set(); // nutrition tag filters
 let collapsedWeeks = new Set(JSON.parse(localStorage.getItem('collapsedWeeks') || '[]'));
 
 // ─── Meals data loading ───────────────────────────────────────────────────────
@@ -1353,8 +1355,63 @@ function ratingShort(r) {
 
 // ─── Recipes tab ──────────────────────────────────────────────────────────────
 
+function setRecipeSort(val) {
+  recipeSort = val;
+  renderMealsPage();
+}
+
+function toggleRecipeFilter(tag) {
+  if (recipeFilters.has(tag)) recipeFilters.delete(tag);
+  else recipeFilters.add(tag);
+  renderMealsPage();
+}
+
 function renderRecipes(container) {
-  const cards = recipes.map(r => `
+  // Sort
+  let sorted = [...recipes];
+  if (recipeSort === 'rating') {
+    sorted.sort((a, b) => {
+      const ra = a.ethan_rating ?? -1;
+      const rb = b.ethan_rating ?? -1;
+      return rb - ra;
+    });
+  } else if (recipeSort === 'time') {
+    sorted.sort((a, b) => (a.prep_time_minutes || 0) - (b.prep_time_minutes || 0));
+  } else {
+    sorted.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // Filter by nutrition tags (all selected tags must be present)
+  if (recipeFilters.size > 0) {
+    sorted = sorted.filter(r =>
+      [...recipeFilters].every(tag => (r.nutrition_tags || []).includes(tag))
+    );
+  }
+
+  const sortBtn = (val, label) =>
+    `<button onclick="setRecipeSort('${val}')" class="recipe-sort-btn${recipeSort === val ? ' active' : ''}">${label}</button>`;
+
+  const filterChip = (tag) =>
+    `<button onclick="toggleRecipeFilter('${tag}')" class="recipe-filter-chip${recipeFilters.has(tag) ? ' active' : ''}">${tag}</button>`;
+
+  const controls = `
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <span style="font-size:11px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;">Sort</span>
+        <div style="display:flex;gap:4px;">
+          ${sortBtn('name', 'A–Z')}
+          ${sortBtn('rating', '⭐ Rating')}
+          ${sortBtn('time', '⏱ Time')}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <span style="font-size:11px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;">Filter</span>
+        ${['protein','carb','fat','fiber','fruit'].map(filterChip).join('')}
+        ${recipeFilters.size > 0 ? `<button onclick="recipeFilters.clear();renderMealsPage();" style="background:none;border:none;font-size:12px;color:var(--gray-400);cursor:pointer;padding:2px 4px;">✕ Clear</button>` : ''}
+      </div>
+    </div>`;
+
+  const cards = sorted.map(r => `
     <div class="recipe-card">
       <div class="recipe-card-header">
         <div style="flex:1;min-width:0;">
@@ -1383,12 +1440,17 @@ function renderRecipes(container) {
       })()}
     </div>`).join('');
 
+  const emptyMsg = recipeFilters.size > 0
+    ? '<div class="empty"><div class="empty-icon">🔍</div>No recipes match these filters</div>'
+    : '<div class="empty"><div class="empty-icon">🍱</div>No recipes yet</div>';
+
   container.innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:4px;">
-      <button class="action-btn" style="flex:1" onclick="openSuggestRecipe()">✨ Suggest</button>
-      <button class="action-btn" style="flex:1" onclick="openAddRecipe()">+ Add manually</button>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button class="action-btn" style="flex:1;margin-bottom:0;" onclick="openSuggestRecipe()">✨ Suggest</button>
+      <button class="action-btn" style="flex:1;margin-bottom:0;" onclick="openAddRecipe()">+ Add</button>
     </div>
-    ${cards || '<div class="empty"><div class="empty-icon">🍱</div>No recipes yet</div>'}
+    ${controls}
+    ${sorted.length ? cards : emptyMsg}
   `;
 }
 
