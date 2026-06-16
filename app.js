@@ -770,7 +770,6 @@ let mealPlan = {};
 let suggestedRecipesCache = [];
 let currentMealsTab = 'planner';
 let weekGroceryList = null;
-let plannerWeeks = parseInt(localStorage.getItem('plannerWeeks') || '1', 10); // 1–3 only
 let collapsedWeeks = new Set(JSON.parse(localStorage.getItem('collapsedWeeks') || '[]'));
 
 // ─── Meals data loading ───────────────────────────────────────────────────────
@@ -789,15 +788,10 @@ async function loadMealPlan() {
   const { data, error } = await db.from('meals').select('*');
   if (!error) {
     mealPlan = {};
-    for (const row of data) mealPlan[row.date] = row;
-    // Auto-expand planner if saved meals exist beyond the current week view
-    const today = dateKey(new Date());
-    const week1End = getWeekDates(1).at(-1);
-    const week2End = getWeekDates(2).at(-1);
-    const hasMealsBeyondWeek1 = Object.keys(mealPlan).some(d => d > week1End && d > today);
-    const hasMealsBeyondWeek2 = Object.keys(mealPlan).some(d => d > week2End && d > today);
-    if (hasMealsBeyondWeek2 && plannerWeeks < 3) plannerWeeks = 3;
-    else if (hasMealsBeyondWeek1 && plannerWeeks < 2) plannerWeeks = 2;
+    for (const row of data) {
+      const type = row.meal_type || 'lunch';
+      mealPlan[row.date + '_' + type] = row;
+    }
   }
 }
 
@@ -822,30 +816,20 @@ function switchMealsTab(tab, btn) {
 
 // ─── Planner tab ──────────────────────────────────────────────────────────────
 
-function getWeekDates(numWeeks = plannerWeeks) {
-  const dates = [];
+function getWeekDates() {
   const now = new Date();
   const monday = new Date(now);
   monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  for (let w = 0; w < numWeeks; w++) {
-    for (let i = 0; i < 5; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + w * 7 + i);
-      dates.push(dateKey(d));
-    }
-  }
-  return dates;
+  return Array.from({length: 5}, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return dateKey(d);
+  });
 }
 
 function getRemainingWeekDates() {
   const today = todayKey();
   return getWeekDates().filter(d => d >= today);
-}
-
-function switchPlannerWeeks(n) {
-  plannerWeeks = Math.min(3, Math.max(1, n));
-  localStorage.setItem('plannerWeeks', plannerWeeks);
-  renderMealsPage();
 }
 
 function getMealNutrition(meal) {
@@ -900,166 +884,86 @@ function getSuggestForNutrient(nutrient) {
 }
 
 function renderPlanner(container) {
-  const dates = getWeekDates();
-  const dayLabels = ['Mon','Tue','Wed','Thu','Fri'];
+  const weekDates = getWeekDates();
   const today = todayKey();
-  const weekLabels = ['This week', 'Next week', 'In 2 weeks', 'In 3 weeks'];
+  const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  const mealTypes = ['breakfast', 'lunch', 'dinner'];
+  const mealTypeLabels = ['Breakfast', 'Lunch', 'Dinner'];
 
-  function buildDayCard(date, dayIndex, weekIndex) {
-    const meal = mealPlan[date];
-    const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
+  const headerCells = weekDates.map((date, i) => {
     const isPast = date < today;
+    const isToday = date === today;
+    const [, m, d] = date.split('-').map(Number);
+    const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1];
+    return `<div class="mg-day-header${isPast ? ' past' : ''}${isToday ? ' is-today' : ''}">
+      <div class="mg-day-name">${dayLabels[i]}</div>
+      <div class="mg-day-date">${mon} ${d}</div>
+    </div>`;
+  }).join('');
 
-    let bentoHtml = '';
-    if (recipe) {
-      const covered = new Set(getMealNutrition(meal));
-      const allNutrients = covered.has('protein') && covered.has('carb') && covered.has('fiber');
-      const badges = ['protein', 'carb', 'fiber'].map(n =>
-        `<span class="nutrition-badge ${n}" style="${covered.has(n) ? '' : 'opacity:0.3;'}">${n}</span>`
-      ).join('');
-      bentoHtml = `<div class="bento-row">${badges}<span style="margin-left:4px;font-size:15px;">${allNutrients ? '👍' : '👎'}</span></div>`;
-    }
+  const gridRows = mealTypes.map((type, ti) => {
+    const cells = weekDates.map((date, di) => {
+      const key = `${date}_${type}`;
+      const meal = mealPlan[key];
+      const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
+      const isPast = date < today;
+      const isToday = date === today;
 
-    const mealPantryItems = (meal?.pantry_item_ids || [])
-      .map(id => pantryItems.find(p => p.id === id)).filter(Boolean);
-
-    let statusHtml = '';
-    if (recipe) {
-      const ps = getPantryStatus(recipe);
-      if (ps) {
-        statusHtml = ps.missing === 0
-          ? `<div style="font-size:11px;font-weight:600;color:var(--green);">✓ All in pantry</div>`
-          : `<div style="font-size:11px;font-weight:600;color:#f59e0b;">🛒 ${ps.missing} ingredient${ps.missing > 1 ? 's' : ''} needed</div>`;
+      let inner;
+      if (recipe) {
+        let extra = '';
+        if (type === 'lunch') {
+          const covered = new Set(getMealNutrition(meal));
+          const ok = covered.has('protein') && covered.has('carb') && covered.has('fiber');
+          if (isPast) {
+            extra = `<button class="bento-question" style="font-size:10px;padding:1px 5px;margin-top:3px;" onclick="event.stopPropagation();openEatFeedback('${date}')">?</button>`;
+          } else {
+            extra = `<div style="font-size:10px;margin-top:2px;">${ok ? '👍' : '👎'}</div>`;
+          }
+        }
+        inner = `<div class="mg-cell-recipe">${recipe.name}</div>${extra}`;
+      } else if (isPast) {
+        inner = `<div class="mg-cell-dash">—</div>`;
+      } else {
+        inner = `<div class="mg-cell-add">+</div>`;
       }
-    }
 
-    const pantryItemsHtml = mealPantryItems.length
-      ? `<div style="font-size:12px;color:var(--gray-400);margin-top:3px;">+ ${mealPantryItems.map(p => {
-          const c = nutrientTextColor(p.nutrition_tags);
-          return c ? `<span style="color:${c};font-weight:600;">${p.name}</span>` : p.name;
-        }).join(' · ')}</div>`
-      : '';
+      const onClick = isPast ? '' : `onclick="openMealPicker('${date}','${type}')"`;
+      return `<div class="mg-cell${isPast ? ' past' : ''}${isToday ? ' is-today' : ''}" ${onClick}>${inner}</div>`;
+    }).join('');
 
-    let recipeHtml;
-    if (isPast && recipe) {
-      recipeHtml = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-        <button class="bento-question" onclick="event.stopPropagation();openEatFeedback('${date}')">?</button>
-        <span style="font-size:13px;color:var(--gray-400);">${recipe.name}</span>
-      </div>${pantryItemsHtml}`;
-    } else if (recipe) {
-      recipeHtml = `<div class="meal-day-name" style="margin-bottom:2px;">${recipe.name}</div>${pantryItemsHtml}`;
-    } else {
-      recipeHtml = `<div class="meal-day-name" style="color:var(--gray-300);">Unplanned</div>`;
-    }
-
-    if (isPast) {
-      return `
-        <div class="meal-day-card" style="opacity:0.55;cursor:pointer;" onclick="togglePastDay('${date}')">
-          <div class="meal-day-header">
-            <div>
-              <span class="meal-day-label" style="color:var(--gray-400);">${dayLabels[dayIndex]}</span>
-              <span class="meal-day-date">${formatPlannerDate(date)}</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              ${recipe ? `<span class="meal-day-rating">⭐ ${recipe.ethan_rating != null ? recipe.ethan_rating + '/10' : 'unknown'}</span>` : ''}
-              <span id="chevron-${date}" style="font-size:11px;color:var(--gray-400);">▶</span>
-            </div>
-          </div>
-          <div id="past-detail-${date}" style="display:none;">
-            ${recipeHtml}
-            ${bentoHtml}
-            ${statusHtml}
-          </div>
-        </div>`;
-    }
-
-    return `
-      <div class="meal-day-card" onclick="openMealPicker('${date}')">
-        <div class="meal-day-header">
-          <div>
-            <span class="meal-day-label">${dayLabels[dayIndex]}</span>
-            <span class="meal-day-date">${formatPlannerDate(date)}</span>
-          </div>
-          ${recipe ? `<span class="meal-day-rating">⭐ ${recipe.ethan_rating != null ? recipe.ethan_rating + '/10' : 'unknown'}</span>` : ''}
-        </div>
-        ${recipeHtml}
-        ${bentoHtml}
-        ${statusHtml}
-      </div>`;
-  }
-
-  // Group dates by week and build collapsible week sections
-  const rows = Array.from({ length: plannerWeeks }, (_, weekIndex) => {
-    const weekDates = dates.slice(weekIndex * 5, (weekIndex + 1) * 5);
-    const isCollapsed = collapsedWeeks.has(weekIndex);
-    const daysHtml = weekDates.map((date, dayIndex) => buildDayCard(date, dayIndex, weekIndex)).join('');
-    const topMargin = weekIndex === 0 ? '0' : '4px';
-    return `
-      <div style="margin-top:${topMargin};">
-        <div onclick="toggleWeek(${weekIndex})" style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px;cursor:pointer;user-select:none;">
-          <span style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.6px;">${weekLabels[weekIndex]}</span>
-          <span id="week-chevron-${weekIndex}" style="font-size:11px;color:var(--gray-400);">${isCollapsed ? '▶' : '▼'}</span>
-        </div>
-        <div id="week-body-${weekIndex}" style="${isCollapsed ? 'display:none;' : ''}">
-          ${daysHtml}
-        </div>
-      </div>`;
+    return `<div class="mg-row-label">${mealTypeLabels[ti]}</div>${cells}`;
   }).join('');
 
   let groceryHtml = '';
   if (weekGroceryList) {
     const isCategorized = typeof weekGroceryList === 'object' && !Array.isArray(weekGroceryList);
-    const categories = isCategorized ? weekGroceryList : null;
-    const flatList = Array.isArray(weekGroceryList) ? weekGroceryList : null;
-
     let bodyHtml = '';
-    if (categories && Object.keys(categories).length) {
-      bodyHtml = Object.entries(categories).map(([cat, items]) => `
+    if (isCategorized && Object.keys(weekGroceryList).length) {
+      bodyHtml = Object.entries(weekGroceryList).map(([cat, items]) => `
         <div style="margin-top:14px;">
           <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">${cat}</div>
           ${items.map(item => `<div style="padding:7px 0;font-size:14px;border-bottom:0.5px solid var(--gray-100);color:var(--gray-900);">${item}</div>`).join('')}
         </div>`).join('');
-    } else if (flatList && flatList.length) {
-      bodyHtml = flatList.map(item => `<div style="padding:7px 0;font-size:14px;border-bottom:0.5px solid var(--gray-100);color:var(--gray-900);">${item}</div>`).join('');
+    } else if (Array.isArray(weekGroceryList) && weekGroceryList.length) {
+      bodyHtml = weekGroceryList.map(item => `<div style="padding:7px 0;font-size:14px;border-bottom:0.5px solid var(--gray-100);color:var(--gray-900);">${item}</div>`).join('');
     } else {
       bodyHtml = '<div style="color:var(--gray-400);font-size:14px;padding:8px 0;">Everything needed is already in your pantry!</div>';
     }
-
-    groceryHtml = `<div class="card" style="margin-top:4px;"><div class="card-title">🛒 Grocery list</div>${bodyHtml}</div>`;
+    groceryHtml = `<div class="card" style="margin-top:16px;"><div class="card-title">🛒 Grocery list</div>${bodyHtml}</div>`;
   }
 
   container.innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <button class="action-btn" id="suggest-btn" style="flex:1;margin-bottom:0;" onclick="autoSuggestWeek()">✨ Auto-suggest week</button>
-      <select onchange="switchPlannerWeeks(parseInt(this.value))" style="padding:13px 12px;border-radius:var(--radius-md);border:none;background:var(--gray-100);color:var(--gray-600);font-size:15px;font-weight:500;font-family:inherit;cursor:pointer;flex-shrink:0;">
-        <option value="1" ${plannerWeeks===1?'selected':''}>This week</option>
-        <option value="2" ${plannerWeeks===2?'selected':''}>+ 1 week</option>
-        <option value="3" ${plannerWeeks===3?'selected':''}>+ 2 weeks</option>
-      </select>
+    <button class="action-btn" id="suggest-btn" onclick="autoSuggestWeek()">✨ Auto-suggest lunches</button>
+    <div class="mg-wrap">
+      <div class="mg-grid">
+        <div class="mg-corner"></div>
+        ${headerCells}
+        ${gridRows}
+      </div>
     </div>
-    ${rows}
     ${groceryHtml}
   `;
-}
-
-function togglePastDay(date) {
-  const detail = document.getElementById('past-detail-' + date);
-  const chevron = document.getElementById('chevron-' + date);
-  if (!detail) return;
-  const opening = detail.style.display === 'none';
-  detail.style.display = opening ? '' : 'none';
-  if (chevron) chevron.textContent = opening ? '▼' : '▶';
-}
-
-function toggleWeek(weekIndex) {
-  const body = document.getElementById('week-body-' + weekIndex);
-  const chevron = document.getElementById('week-chevron-' + weekIndex);
-  if (!body) return;
-  const closing = body.style.display !== 'none';
-  body.style.display = closing ? 'none' : '';
-  if (chevron) chevron.textContent = closing ? '▶' : '▼';
-  if (closing) collapsedWeeks.add(weekIndex); else collapsedWeeks.delete(weekIndex);
-  localStorage.setItem('collapsedWeeks', JSON.stringify([...collapsedWeeks]));
 }
 
 // ─── Auto-suggest ─────────────────────────────────────────────────────────────
@@ -1099,12 +1003,12 @@ async function autoSuggestWeek() {
       }
       if (!recipe) continue;
 
-      const id = 'meal-' + meal.date;
+      const id = `meal-${meal.date}-lunch`;
       const { error: mealErr } = await db.from('meals').upsert(
-        { id, date: meal.date, recipe_id: recipe.id, confirmed: false },
-        { onConflict: 'date' }
+        { id, date: meal.date, meal_type: 'lunch', recipe_id: recipe.id, confirmed: false },
+        { onConflict: 'id' }
       );
-      if (!mealErr) mealPlan[meal.date] = { id, date: meal.date, recipe_id: recipe.id, confirmed: false };
+      if (!mealErr) mealPlan[meal.date + '_lunch'] = { id, date: meal.date, meal_type: 'lunch', recipe_id: recipe.id, confirmed: false };
     }
 
     weekGroceryList = data.groceryList || null;
@@ -1119,11 +1023,19 @@ async function autoSuggestWeek() {
 
 // ─── Meal picker modal ────────────────────────────────────────────────────────
 
-function openMealPicker(date) {
-  const meal = mealPlan[date] || {};
-  const options = recipes.map(r =>
+function openMealPicker(date, type) {
+  const key = `${date}_${type}`;
+  const meal = mealPlan[key] || {};
+  const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+  const [, m, d] = date.split('-').map(Number);
+  const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1];
+  const [, , , dayOfWeek] = [0, 0, 0, new Date(date + 'T12:00:00').toLocaleDateString('en-US', {weekday:'short'})];
+  const dayName = new Date(date + 'T12:00:00').toLocaleDateString('en-US', {weekday: 'short'});
+
+  const noRecipeOpt = `<option value="">— No recipe —</option>`;
+  const options = noRecipeOpt + recipes.map(r =>
     `<option value="${r.id}" ${meal.recipe_id === r.id ? 'selected' : ''}>
-      ${r.name} (⭐${r.ethan_rating}, ${r.prep_time_minutes}min)
+      ${r.name} (${ratingShort(r)}) · ${r.prep_time_minutes}min
     </option>`
   ).join('');
 
@@ -1133,38 +1045,52 @@ function openMealPicker(date) {
         ${(meal.pantry_item_ids||[]).includes(p.id) ? 'checked' : ''}
         style="accent-color:var(--green);width:16px;height:16px;">
       ${p.name}
-      ${p.nutrition_tags.map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}
+      ${(p.nutrition_tags||[]).map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}
     </label>`
   ).join('');
 
   document.getElementById('modal-overlay').innerHTML = `
     <div class="modal">
-      <div class="modal-title">Plan meal for ${date}</div>
+      <div class="modal-title">${typeLabel} · ${dayName} ${mon} ${d}</div>
       <div class="form-group">
-        <label class="form-label">Main recipe</label>
+        <label class="form-label">Recipe</label>
         <select class="form-input" id="meal-picker-recipe">${options}</select>
       </div>
+      ${pantryItems.length ? `
       <div class="form-group">
         <label class="form-label">Add pantry items</label>
         <div id="meal-picker-pantry">${pantryOptions}</div>
-      </div>
+      </div>` : ''}
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
-        <button class="btn-primary" onclick="saveMealPick('${date}')">Save</button>
+        ${meal.recipe_id ? `<button class="btn-danger" style="flex:0.6;" onclick="clearMealPick('${date}','${type}')">Clear</button>` : ''}
+        <button class="btn-primary" onclick="saveMealPick('${date}','${type}')">Save</button>
       </div>
     </div>`;
   document.getElementById('modal-overlay').classList.add('open');
 }
 
-async function saveMealPick(date) {
+async function clearMealPick(date, type) {
+  const key = `${date}_${type}`;
+  const meal = mealPlan[key];
+  if (!meal) return;
+  const { error } = await db.from('meals').delete().eq('id', meal.id);
+  if (!error) delete mealPlan[key];
+  closeMealModal();
+  renderMealsPage();
+}
+
+async function saveMealPick(date, type) {
   const recipeId = document.getElementById('meal-picker-recipe').value;
+  if (!recipeId) { closeMealModal(); return; }
   const checkedPantry = [...document.querySelectorAll('#meal-picker-pantry input:checked')].map(el => el.value);
-  const id = 'meal-' + date;
+  const id = `meal-${date}-${type}`;
+  const key = `${date}_${type}`;
   const { error } = await db.from('meals').upsert(
-    { id, date, recipe_id: recipeId, pantry_item_ids: checkedPantry, confirmed: true },
-    { onConflict: 'date' }
+    { id, date, meal_type: type, recipe_id: recipeId, pantry_item_ids: checkedPantry, confirmed: true },
+    { onConflict: 'id' }
   );
-  if (!error) mealPlan[date] = { id, date, recipe_id: recipeId, pantry_item_ids: checkedPantry, confirmed: true };
+  if (!error) mealPlan[key] = { id, date, meal_type: type, recipe_id: recipeId, pantry_item_ids: checkedPantry, confirmed: true };
   closeMealModal();
   renderMealsPage();
 }
@@ -1172,7 +1098,7 @@ async function saveMealPick(date) {
 // ─── Eat feedback flow ────────────────────────────────────────────────────────
 
 function openEatFeedback(date) {
-  const meal = mealPlan[date];
+  const meal = mealPlan[date + '_lunch'];
   const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
   if (!recipe) return;
   const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(date + 'T12:00:00').getDay()];
@@ -1192,7 +1118,7 @@ function openEatFeedback(date) {
 }
 
 function showEatAmountPicker(date) {
-  const meal = mealPlan[date];
+  const meal = mealPlan[date + '_lunch'];
   const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
   if (!recipe) return;
 
@@ -1230,7 +1156,7 @@ function selectEatLevel(btn) {
 }
 
 async function saveEatFeedback(date) {
-  const meal = mealPlan[date];
+  const meal = mealPlan[date + '_lunch'];
   const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
   if (!recipe) return;
 
@@ -1238,18 +1164,18 @@ async function saveEatFeedback(date) {
   if (!activeBtn) return;
   const pct = parseFloat(activeBtn.dataset.pct);
 
-  // Calculate new rating
+  // Calculate new rating (scale: 0=dislike, 1-5=stars, null=unknown)
   const curr = recipe.ethan_rating;
   let newRating;
-  if (curr == null) {
-    newRating = Math.max(1, Math.round(pct * 10));
+  if (curr == null || curr === 0) {
+    newRating = pct < 0.2 ? 0 : Math.max(1, Math.round(pct * 5));
   } else {
-    const delta = pct >= 0.8 ? 2 : pct >= 0.5 ? 0 : pct >= 0.2 ? -2 : -3;
-    newRating = Math.max(1, Math.min(10, curr + delta));
+    const delta = pct >= 0.8 ? 1 : pct >= 0.5 ? 0 : pct >= 0.2 ? -1 : -2;
+    newRating = Math.max(0, Math.min(5, curr + delta));
   }
 
   const updates = { ethan_rating: newRating };
-  if (newRating < 2) {
+  if (newRating < 1) {
     const avoidDate = new Date();
     avoidDate.setDate(avoidDate.getDate() + 14);
     updates.avoid_until = dateKey(avoidDate);
@@ -1376,8 +1302,8 @@ function renderPrep(container) {
   const today = todayKey();
   const tomorrow = dateKey(new Date(new Date().setDate(new Date().getDate() + 1)));
 
-  const todayMeal = mealPlan[today];
-  const tomorrowMeal = mealPlan[tomorrow];
+  const todayMeal = mealPlan[today + '_lunch'];
+  const tomorrowMeal = mealPlan[tomorrow + '_lunch'];
 
   function stepsHtml(meal, label) {
     if (!meal) return `<div class="empty" style="padding:20px 0">${label}: no meal planned</div>`;
@@ -1412,6 +1338,19 @@ function toggleStep(checkbox) {
   label.classList.toggle('done', checkbox.checked);
 }
 
+function ratingDisplay(r) {
+  if (r.ethan_rating === 0) return '💔 dislike';
+  if (r.ethan_rating == null) return 'unknown';
+  const stars = Math.min(5, r.ethan_rating);
+  return '⭐'.repeat(stars) + ' ' + stars + '/5';
+}
+
+function ratingShort(r) {
+  if (r.ethan_rating === 0) return '💔';
+  if (r.ethan_rating == null) return '?';
+  return '⭐' + Math.min(5, r.ethan_rating);
+}
+
 // ─── Recipes tab ──────────────────────────────────────────────────────────────
 
 function renderRecipes(container) {
@@ -1420,7 +1359,7 @@ function renderRecipes(container) {
       <div class="recipe-card-header">
         <div style="flex:1;min-width:0;">
           <div class="recipe-card-name">${r.name}</div>
-          <div class="recipe-card-meta">⏱ ${r.prep_time_minutes} min · ⭐ ${r.ethan_rating != null ? r.ethan_rating + '/10' : 'unknown'}</div>
+          <div class="recipe-card-meta">⏱ ${r.prep_time_minutes} min · ${ratingDisplay(r)}</div>
         </div>
         <div style="display:flex;gap:2px;align-items:center;">
           <button onclick="openEditRecipe('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);padding:4px;" title="Edit">
@@ -1588,10 +1527,11 @@ function openAddRecipe() {
         <label class="form-label">Ethan's rating</label>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <div class="star-rating" id="r-stars">
-            ${[1,2,3,4,5,6,7,8,9,10].map(n =>
+            ${[1,2,3,4,5].map(n =>
               `<span class="star" data-val="${n}" onclick="setStars(${n})">★</span>`
             ).join('')}
           </div>
+          <button type="button" class="dislike-btn" onclick="setStars(0)">💔 Dislike</button>
           <button type="button" class="not-sure-btn" onclick="setStars(null)">Unknown</button>
         </div>
         <input type="hidden" id="r-rating" value=""/>
@@ -1636,12 +1576,15 @@ function previewPhoto(input) {
 
 function setStars(val) {
   const isEmpty = val === null || val === undefined || val === '';
+  const isDislike = val === 0;
   document.getElementById('r-rating').value = isEmpty ? '' : val;
   document.querySelectorAll('.star').forEach(s => {
-    s.classList.toggle('active', !isEmpty && parseInt(s.dataset.val) <= val);
+    s.classList.toggle('active', !isEmpty && !isDislike && parseInt(s.dataset.val) <= val);
   });
   const nsBtn = document.querySelector('.not-sure-btn');
   if (nsBtn) nsBtn.classList.toggle('active', isEmpty);
+  const dlBtn = document.querySelector('.dislike-btn');
+  if (dlBtn) dlBtn.classList.toggle('active', isDislike);
 }
 
 async function saveRecipeWithAI() {
@@ -1736,10 +1679,11 @@ function openEditRecipe(id) {
         <label class="form-label">Ethan's rating</label>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <div class="star-rating" id="r-stars">
-            ${[1,2,3,4,5,6,7,8,9,10].map(n =>
+            ${[1,2,3,4,5].map(n =>
               `<span class="star" data-val="${n}" onclick="setStars(${n})">★</span>`
             ).join('')}
           </div>
+          <button type="button" class="dislike-btn" onclick="setStars(0)">💔 Dislike</button>
           <button type="button" class="not-sure-btn" onclick="setStars(null)">Unknown</button>
         </div>
         <input type="hidden" id="r-rating" value="${r.ethan_rating ?? ''}"/>
