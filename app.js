@@ -1415,7 +1415,7 @@ function renderRecipes(container) {
     <div class="recipe-card">
       <div class="recipe-card-header">
         <div style="flex:1;min-width:0;">
-          <div class="recipe-card-name">${r.name}</div>
+          <div class="recipe-card-name">${r.name}${r.source_url ? ` <a href="${r.source_url}" target="_blank" style="font-size:12px;color:var(--green);text-decoration:none;margin-left:4px;" onclick="event.stopPropagation()">🔗</a>` : ''}</div>
           <div class="recipe-card-meta">⏱ ${r.prep_time_minutes} min · ${ratingDisplay(r)}</div>
         </div>
         <div style="display:flex;gap:2px;align-items:center;">
@@ -1445,8 +1445,9 @@ function renderRecipes(container) {
     : '<div class="empty"><div class="empty-icon">🍱</div>No recipes yet</div>';
 
   container.innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:12px;">
+    <div style="display:flex;gap:6px;margin-bottom:12px;">
       <button class="action-btn" style="flex:1;margin-bottom:0;" onclick="openSuggestRecipe()">✨ Suggest</button>
+      <button class="action-btn" style="flex:1;margin-bottom:0;" onclick="openImportRecipe()">🔗 URL</button>
       <button class="action-btn" style="flex:1;margin-bottom:0;" onclick="openAddRecipe()">+ Add</button>
     </div>
     ${controls}
@@ -1569,21 +1570,65 @@ async function saveSelectedSuggestions() {
   if (failed) showAlert(`${failed} recipe(s) could not be saved. Please try again.`);
 }
 
-function openAddRecipe() {
+function openImportRecipe() {
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal">
+      <div class="modal-title">🔗 Import from URL</div>
+      <div style="font-size:13px;color:var(--gray-400);margin-bottom:16px;">Paste any recipe URL — we'll fetch and fill in all the details automatically.</div>
+      <div class="form-group">
+        <label class="form-label">Recipe URL</label>
+        <input class="form-input" id="import-url" type="url" placeholder="https://..." autofocus/>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
+        <button class="btn-primary" id="import-btn" onclick="importRecipeFromUrl()">Import →</button>
+      </div>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+async function importRecipeFromUrl() {
+  const url = document.getElementById('import-url').value.trim();
+  if (!url) return;
+  const btn = document.getElementById('import-btn');
+  btn.textContent = '⏳ Fetching…'; btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/import-recipe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    openAddRecipe({ ...data, source_url: url });
+  } catch (err) {
+    showAlert('Could not import recipe: ' + err.message);
+    btn.textContent = 'Import →'; btn.disabled = false;
+  }
+}
+
+function openAddRecipe(prefill = {}) {
+  const esc = s => (s || '').replace(/"/g, '&quot;');
+  const ingVal = Array.isArray(prefill.ingredients)
+    ? prefill.ingredients.join(', ')
+    : (prefill.ingredients || '');
+
   document.getElementById('modal-overlay').innerHTML = `
     <div class="modal">
       <div class="modal-title">New recipe</div>
+      ${prefill.source_url ? `<div style="font-size:12px;color:var(--green);margin-bottom:12px;word-break:break-all;">🔗 <a href="${esc(prefill.source_url)}" target="_blank" style="color:var(--green);">${esc(prefill.source_url)}</a></div>` : ''}
       <div class="form-group">
         <label class="form-label">Recipe name</label>
-        <input class="form-input" id="r-name" type="text" placeholder="e.g. Pasta salad"/>
+        <input class="form-input" id="r-name" type="text" placeholder="e.g. Pasta salad" value="${esc(prefill.name)}"/>
       </div>
       <div class="form-group">
         <label class="form-label">Ingredients (comma separated)</label>
-        <input class="form-input" id="r-ingredients" type="text" placeholder="e.g. pasta, pesto, cherry tomatoes"/>
+        <input class="form-input" id="r-ingredients" type="text" placeholder="e.g. pasta, pesto, cherry tomatoes" value="${esc(ingVal)}"/>
       </div>
       <div class="form-group">
         <label class="form-label">Prep time (minutes)</label>
-        <input class="form-input" id="r-time" type="number" value="15" min="1" max="120"/>
+        <input class="form-input" id="r-time" type="number" value="${prefill.prep_time_minutes || 15}" min="1" max="120"/>
       </div>
       <div class="form-group">
         <label class="form-label">Ethan's rating</label>
@@ -1603,7 +1648,7 @@ function openAddRecipe() {
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
           ${['protein','carb','fat','fiber','fruit'].map(t => `
             <label style="display:flex;align-items:center;gap:6px;font-size:14px;">
-              <input type="checkbox" value="${t}" class="r-nutrition" style="accent-color:var(--green);width:16px;height:16px;">
+              <input type="checkbox" value="${t}" class="r-nutrition" style="accent-color:var(--green);width:16px;height:16px;" ${(prefill.nutrition_tags||[]).includes(t) ? 'checked' : ''}>
               <span class="nutrition-badge ${t}">${t}</span>
             </label>`).join('')}
         </div>
@@ -1617,8 +1662,9 @@ function openAddRecipe() {
       </div>
       <div class="form-group">
         <label class="form-label">Describe the recipe — AI will generate prep steps</label>
-        <textarea class="form-input" id="r-desc" rows="3" placeholder="e.g. Cook pasta, mix with pesto and cherry tomatoes, pack with fork"></textarea>
+        <textarea class="form-input" id="r-desc" rows="3" placeholder="e.g. Cook pasta, mix with pesto and cherry tomatoes, pack with fork">${esc(prefill.description)}</textarea>
       </div>
+      <input type="hidden" id="r-source-url" value="${esc(prefill.source_url)}"/>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
         <button class="btn-primary" onclick="saveRecipeWithAI()">✨ Generate & save</button>
@@ -1657,6 +1703,7 @@ async function saveRecipeWithAI() {
   const rating = ratingRaw === '' ? null : parseInt(ratingRaw);
   const nutritionTags = [...document.querySelectorAll('.r-nutrition:checked')].map(el => el.value);
   const desc = document.getElementById('r-desc').value.trim();
+  const sourceUrl = document.getElementById('r-source-url')?.value.trim() || null;
   if (!name) return;
 
   const saveBtn = document.querySelector('#modal-overlay .btn-primary');
@@ -1695,11 +1742,11 @@ async function saveRecipeWithAI() {
   const { error } = await db.from('recipes').insert({
     id, name, ingredients, prep_steps: prepSteps,
     prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags,
-    photo_url: photoUrl
+    photo_url: photoUrl, source_url: sourceUrl
   });
 
   if (!error) {
-    recipes.push({ id, name, ingredients, prep_steps: prepSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, photo_url: photoUrl });
+    recipes.push({ id, name, ingredients, prep_steps: prepSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, photo_url: photoUrl, source_url: sourceUrl });
     closeMealModal();
     renderMealsPage();
   } else {
