@@ -773,6 +773,7 @@ let weekGroceryList = null;
 let recipeSort = 'name'; // 'name' | 'rating' | 'time'
 let recipeFilters = new Set(); // nutrition tag filters
 let collapsedWeeks = new Set(JSON.parse(localStorage.getItem('collapsedWeeks') || '[]'));
+let plannerWeeks = parseInt(localStorage.getItem('plannerWeeks') || '1', 10);
 
 // ─── Meals data loading ───────────────────────────────────────────────────────
 
@@ -818,10 +819,10 @@ function switchMealsTab(tab, btn) {
 
 // ─── Planner tab ──────────────────────────────────────────────────────────────
 
-function getWeekDates() {
+function getWeekDates(weekOffset = 0) {
   const now = new Date();
   const monday = new Date(now);
-  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7) + weekOffset * 7);
   return Array.from({length: 5}, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
@@ -831,7 +832,13 @@ function getWeekDates() {
 
 function getRemainingWeekDates() {
   const today = todayKey();
-  return getWeekDates().filter(d => d >= today);
+  return getWeekDates(0).filter(d => d >= today);
+}
+
+function switchPlannerWeeks(offset) {
+  plannerWeeks = offset;
+  localStorage.setItem('plannerWeeks', offset);
+  renderMealsPage();
 }
 
 function getMealNutrition(meal) {
@@ -886,7 +893,7 @@ function getSuggestForNutrient(nutrient) {
 }
 
 function renderPlanner(container) {
-  const weekDates = getWeekDates();
+  const weekDates = getWeekDates(plannerWeeks);
   const today = todayKey();
   const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
   const mealTypes = ['breakfast', 'lunch', 'dinner'];
@@ -955,8 +962,16 @@ function renderPlanner(container) {
     groceryHtml = `<div class="card" style="margin-top:16px;"><div class="card-title">🛒 Grocery list</div>${bodyHtml}</div>`;
   }
 
+  const weekLabels = ['This week', 'Next week', 'In 2 weeks'];
+  const weekNav = weekLabels.map((label, i) =>
+    `<button onclick="switchPlannerWeeks(${i})" style="flex:1;padding:7px 4px;border:none;background:${plannerWeeks===i ? 'white' : 'none'};border-radius:var(--radius-sm);font-size:13px;font-weight:${plannerWeeks===i ? '600' : '400'};color:${plannerWeeks===i ? 'var(--gray-900)' : 'var(--gray-400)'};cursor:pointer;font-family:inherit;${plannerWeeks===i ? 'box-shadow:0 1px 3px rgba(0,0,0,0.08);' : ''}">${label}</button>`
+  ).join('');
+
   container.innerHTML = `
-    <button class="action-btn" id="suggest-btn" onclick="autoSuggestWeek()">✨ Auto-suggest lunches</button>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="action-btn" id="suggest-btn" style="flex:1;margin-bottom:0;" onclick="autoSuggestWeek()">✨ Auto-suggest</button>
+    </div>
+    <div style="display:flex;background:var(--gray-100);border-radius:var(--radius-md);padding:3px;margin-bottom:12px;">${weekNav}</div>
     <div class="mg-wrap">
       <div class="mg-grid">
         <div class="mg-corner"></div>
@@ -1441,12 +1456,25 @@ function renderRecipes(container) {
       <div>${(r.nutrition_tags||[]).map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}</div>
       <div style="margin-top:8px;font-size:13px;color:var(--gray-400)">${(r.ingredients||[]).join(', ')}</div>
       ${(() => {
+        const steps = r.instruction_steps || [];
         const nightSteps = (r.prep_steps||[]).filter(s => s.when === 'night_before');
-        if (!nightSteps.length) return '';
-        return `<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--gray-100)">
-          <div style="font-size:11px;font-weight:600;color:var(--gray-400);margin-bottom:6px;">🌙 PREP TONIGHT</div>
-          ${nightSteps.map(s => `<div style="font-size:13px;color:var(--gray-600);padding:2px 0">• ${s.text}</div>`).join('')}
-        </div>`;
+        const id = 'instruct-' + r.id;
+        return `
+          ${steps.length ? `
+            <div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--gray-100);">
+              <div onclick="toggleInstructions('${id}')" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;">
+                <span style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.4px;">📋 Instructions</span>
+                <span id="ichev-${id}" style="font-size:11px;color:var(--gray-400);">▶</span>
+              </div>
+              <div id="${id}" style="display:none;margin-top:6px;">
+                ${steps.map((s,i) => `<div style="font-size:13px;color:var(--gray-600);padding:3px 0;line-height:1.5;">${s}</div>`).join('')}
+              </div>
+            </div>` : ''}
+          ${nightSteps.length ? `
+            <div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--gray-100)">
+              <div style="font-size:11px;font-weight:600;color:var(--gray-400);margin-bottom:6px;">🌙 PREP TONIGHT</div>
+              ${nightSteps.map(s => `<div style="font-size:13px;color:var(--gray-600);padding:2px 0">• ${s.text}</div>`).join('')}
+            </div>` : ''}`;
       })()}
     </div>`).join('');
 
@@ -1678,13 +1706,13 @@ function openAddRecipe(prefill = {}) {
         <input type="file" id="r-photo-input" accept="image/*" style="display:none" onchange="previewPhoto(this)">
       </div>
       <div class="form-group">
-        <label class="form-label">Describe the recipe — AI will generate prep steps</label>
-        <textarea class="form-input" id="r-desc" rows="3" placeholder="e.g. Cook pasta, mix with pesto and cherry tomatoes, pack with fork">${esc(prefill.description)}</textarea>
+        <label class="form-label">Full recipe instructions</label>
+        <textarea class="form-input" id="r-instructions" rows="5" placeholder="Write the step-by-step instructions here. AI will organize them into clean steps and generate prep notes.">${esc(prefill.description || prefill.instructions)}</textarea>
       </div>
       <input type="hidden" id="r-source-url" value="${esc(prefill.source_url)}"/>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
-        <button class="btn-primary" onclick="saveRecipeWithAI()">✨ Generate & save</button>
+        <button class="btn-primary" onclick="saveRecipeWithAI()">✨ Organize & save</button>
       </div>
     </div>`;
   document.getElementById('modal-overlay').classList.add('open');
@@ -1697,6 +1725,15 @@ function previewPhoto(input) {
   const url = URL.createObjectURL(file);
   document.getElementById('r-photo-preview').innerHTML =
     `<img src="${url}" style="width:100%;height:100%;object-fit:cover;">`;
+}
+
+function toggleInstructions(id) {
+  const el = document.getElementById(id);
+  const chev = document.getElementById('ichev-' + id);
+  if (!el) return;
+  const opening = el.style.display === 'none';
+  el.style.display = opening ? '' : 'none';
+  if (chev) chev.textContent = opening ? '▼' : '▶';
 }
 
 function toggleMealTypeChip(btn) {
@@ -1728,26 +1765,28 @@ async function saveRecipeWithAI() {
   const rating = ratingRaw === '' ? null : parseInt(ratingRaw);
   const nutritionTags = [...document.querySelectorAll('.r-nutrition:checked')].map(el => el.value);
   const mealTypes = getSelectedMealTypes();
-  const desc = document.getElementById('r-desc').value.trim();
+  const instructions = document.getElementById('r-instructions').value.trim();
   const sourceUrl = document.getElementById('r-source-url')?.value.trim() || null;
   if (!name) return;
 
   const saveBtn = document.querySelector('#modal-overlay .btn-primary');
-  saveBtn.textContent = '⏳ Generating...';
+  saveBtn.textContent = '⏳ Organizing…';
   saveBtn.disabled = true;
 
   let prepSteps = [];
-  if (desc) {
+  let instructionSteps = [];
+  if (instructions) {
     try {
-      const response = await fetch('/api/generate-steps', {
+      const response = await fetch('/api/organize-recipe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description: desc, ingredients: ingredientsRaw })
+        body: JSON.stringify({ name, ingredients: ingredientsRaw, instructions })
       });
       const data = await response.json();
-      prepSteps = data.steps || [];
+      instructionSteps = data.instruction_steps || [];
+      prepSteps = data.prep_steps || [];
     } catch (e) {
-      console.error('AI step generation failed', e);
+      console.error('AI organization failed', e);
     }
   }
 
@@ -1766,13 +1805,14 @@ async function saveRecipeWithAI() {
   }
 
   const { error } = await db.from('recipes').insert({
-    id, name, ingredients, prep_steps: prepSteps,
+    id, name, ingredients, prep_steps: prepSteps, instructions,
+    instruction_steps: instructionSteps,
     prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags,
     meal_types: mealTypes, photo_url: photoUrl, source_url: sourceUrl
   });
 
   if (!error) {
-    recipes.push({ id, name, ingredients, prep_steps: prepSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, meal_types: mealTypes, photo_url: photoUrl, source_url: sourceUrl });
+    recipes.push({ id, name, ingredients, prep_steps: prepSteps, instructions, instruction_steps: instructionSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, meal_types: mealTypes, photo_url: photoUrl, source_url: sourceUrl });
     closeMealModal();
     renderMealsPage();
   } else {
@@ -1848,12 +1888,17 @@ function openEditRecipe(id) {
         <input type="file" id="r-photo-input" accept="image/*" style="display:none" onchange="previewPhoto(this)">
       </div>
       <div class="form-group">
-        <label class="form-label">Re-describe to regenerate prep steps (leave blank to keep existing)</label>
-        <textarea class="form-input" id="r-desc" rows="3" placeholder="e.g. Cook pasta, mix with pesto and cherry tomatoes..."></textarea>
+        <label class="form-label">Full recipe instructions</label>
+        <textarea class="form-input" id="r-instructions" rows="5" placeholder="Write the step-by-step instructions. Leave blank to keep existing steps.">${(r.instructions || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+        ${(r.instruction_steps||[]).length ? `
+          <div style="margin-top:8px;padding:10px 12px;background:var(--gray-50);border-radius:var(--radius-sm);border:0.5px solid var(--gray-200);">
+            <div style="font-size:10px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">Current steps</div>
+            ${(r.instruction_steps).map((s,i)=>`<div style="font-size:12px;color:var(--gray-600);padding:2px 0;">${s}</div>`).join('')}
+          </div>` : ''}
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
-        <button class="btn-primary" onclick="saveEditRecipe('${id}')">Save changes</button>
+        <button class="btn-primary" onclick="saveEditRecipe('${id}')">✨ Organize & save</button>
       </div>
     </div>`;
   document.getElementById('modal-overlay').classList.add('open');
@@ -1870,26 +1915,28 @@ async function saveEditRecipe(id) {
   const rating = ratingRaw === '' ? null : parseInt(ratingRaw);
   const nutritionTags = [...document.querySelectorAll('.r-nutrition:checked')].map(el => el.value);
   const mealTypes = getSelectedMealTypes();
-  const desc = document.getElementById('r-desc').value.trim();
+  const instructions = document.getElementById('r-instructions').value.trim();
   if (!name) return;
 
   const saveBtn = document.querySelector('#modal-overlay .btn-primary');
   saveBtn.disabled = true;
 
   let prepSteps = r.prep_steps || [];
-  if (desc) {
-    saveBtn.textContent = '⏳ Generating steps...';
+  let instructionSteps = r.instruction_steps || [];
+  if (instructions) {
+    saveBtn.textContent = '⏳ Organizing…';
     try {
-      const res = await fetch('/api/generate-steps', {
+      const res = await fetch('/api/organize-recipe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description: desc, ingredients: ingredientsRaw })
+        body: JSON.stringify({ name, ingredients: ingredientsRaw, instructions })
       });
       const data = await res.json();
-      prepSteps = data.steps || [];
-    } catch (e) { console.error('AI step generation failed', e); }
+      instructionSteps = data.instruction_steps || instructionSteps;
+      prepSteps = data.prep_steps || prepSteps;
+    } catch (e) { console.error('AI organization failed', e); }
   } else {
-    saveBtn.textContent = '⏳ Saving...';
+    saveBtn.textContent = '⏳ Saving…';
   }
 
   const ingredients = ingredientsRaw.split(',').map(s => s.trim()).filter(Boolean);
@@ -1907,13 +1954,15 @@ async function saveEditRecipe(id) {
 
   const { error } = await db.from('recipes').update({
     name, ingredients, prep_steps: prepSteps,
+    instructions: instructions || r.instructions || null,
+    instruction_steps: instructionSteps,
     prep_time_minutes: prepTime, ethan_rating: rating,
     nutrition_tags: nutritionTags, meal_types: mealTypes, photo_url: photoUrl
   }).eq('id', id);
 
   if (!error) {
     const idx = recipes.findIndex(r => r.id === id);
-    if (idx !== -1) recipes[idx] = { ...recipes[idx], name, ingredients, prep_steps: prepSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, meal_types: mealTypes, photo_url: photoUrl };
+    if (idx !== -1) recipes[idx] = { ...recipes[idx], name, ingredients, prep_steps: prepSteps, instructions: instructions || r.instructions, instruction_steps: instructionSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, meal_types: mealTypes, photo_url: photoUrl };
     closeMealModal();
     renderMealsPage();
   } else {
