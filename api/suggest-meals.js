@@ -72,8 +72,9 @@ Use category names that make sense for the items. Common categories: "Proteins",
     }
 
     const data = await res.json();
-    const text = data.content?.[0]?.text?.trim() || '{}';
-    const result = JSON.parse(text);
+    const raw = data.content?.[0]?.text?.trim() || '{}';
+    const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const result = JSON.parse(fenceMatch ? fenceMatch[1].trim() : raw);
     return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' }
     });

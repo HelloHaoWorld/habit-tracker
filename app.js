@@ -1066,7 +1066,7 @@ function openMealPicker(date, type) {
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
         ${meal.recipe_id ? `<button class="btn-danger" style="flex:0.6;" onclick="clearMealPick('${date}','${type}')">Clear</button>` : ''}
-        <button class="btn-primary" onclick="saveMealPick('${date}','${type}')">Save</button>
+        <button class="btn-primary" id="meal-save-btn" onclick="saveMealPick('${date}','${type}')">Save</button>
       </div>
     </div>`;
   document.getElementById('modal-overlay').classList.add('open');
@@ -1088,11 +1088,18 @@ async function saveMealPick(date, type) {
   const checkedPantry = [...document.querySelectorAll('#meal-picker-pantry input:checked')].map(el => el.value);
   const id = `meal-${date}-${type}`;
   const key = `${date}_${type}`;
+  const saveBtn = document.getElementById('meal-save-btn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
   const { error } = await db.from('meals').upsert(
     { id, date, meal_type: type, recipe_id: recipeId, pantry_item_ids: checkedPantry, confirmed: true },
     { onConflict: 'id' }
   );
-  if (!error) mealPlan[key] = { id, date, meal_type: type, recipe_id: recipeId, pantry_item_ids: checkedPantry, confirmed: true };
+  if (error) {
+    showAlert('Could not save meal: ' + error.message);
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+    return;
+  }
+  mealPlan[key] = { id, date, meal_type: type, recipe_id: recipeId, pantry_item_ids: checkedPantry, confirmed: true };
   closeMealModal();
   renderMealsPage();
 }

@@ -96,8 +96,11 @@ For nutrition_tags pick any that apply from: "protein", "carb", "fat", "fiber", 
     }
 
     const data = await res.json();
-    const text = data.content?.[0]?.text?.trim() || '{}';
-    const result = JSON.parse(text);
+    const raw = data.content?.[0]?.text?.trim() || '{}';
+    // Strip markdown code fences if the model wraps the JSON
+    const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const jsonStr = fenceMatch ? fenceMatch[1].trim() : raw;
+    const result = JSON.parse(jsonStr);
     return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 200 });
