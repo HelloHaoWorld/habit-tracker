@@ -12,6 +12,7 @@ let currentUser = null;
 let userProfile = null;
 let goals = [];
 let logs = {};       // { goalId: { 'YYYY-MM-DD': { success, logged_by } } }
+let wallet = null;
 let chartInstance = null;
 let currentPage = 'today';
 let selectedGoalId = null;
@@ -111,14 +112,73 @@ async function loadProfile() {
   }
 }
 
+async function loadWallet() {
+  const { data, error } = await db.from('wallets').select('*').eq('user_id', currentUser.id).single();
+  if (data) {
+    wallet = data;
+  } else {
+    const { data: created } = await db.from('wallets').insert({
+      user_id: currentUser.id, balance: 50, last_processed_date: todayKey()
+    }).select().single();
+    wallet = created;
+  }
+}
+
+async function processMissedCheckins() {
+  if (!wallet) return;
+  const today = todayKey();
+  if (wallet.last_processed_date >= today) return;
+
+  const start = new Date(wallet.last_processed_date + 'T12:00:00');
+  start.setDate(start.getDate() + 1);
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  let totalDeduction = 0;
+  const starLogInserts = [];
+  const goalUpdates = {};
+
+  const d = new Date(start);
+  while (dateKey(d) <= dateKey(yesterday)) {
+    const key = dateKey(d);
+    for (const goal of goals) {
+      if (!isApplicableDay(goal, key)) continue;
+      const goalCreated = goal.created_at ? dateKey(new Date(goal.created_at)) : null;
+      if (goalCreated && key < goalCreated) continue;
+      if (!logs[goal.id]?.[key]) {
+        totalDeduction += 1;
+        goalUpdates[goal.id] = (goalUpdates[goal.id] || 0) - 1;
+        starLogInserts.push({ user_id: currentUser.id, goal_id: goal.id, change: -1, reason: 'no_checkin', date: key });
+      }
+    }
+    d.setDate(d.getDate() + 1);
+  }
+
+  const newBalance = Math.max(0, (wallet.balance || 0) - totalDeduction);
+  await db.from('wallets').update({ balance: newBalance, last_processed_date: today }).eq('user_id', currentUser.id);
+  wallet.balance = newBalance;
+  wallet.last_processed_date = today;
+
+  for (const [goalId, delta] of Object.entries(goalUpdates)) {
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal) continue;
+    const newBal = Math.max(0, (goal.star_balance || 0) + delta);
+    await db.from('goals').update({ star_balance: newBal }).eq('id', goalId);
+    goal.star_balance = newBal;
+  }
+  if (starLogInserts.length) await db.from('star_logs').insert(starLogInserts);
+}
+
 // ─── Logging ──────────────────────────────────────────────────────────────────
 
 async function log(goalId, value) {
   const date = todayKey();
   const name = currentUser?.user_metadata?.name || currentUser?.email || 'Unknown';
+  const goal = goals.find(g => g.id === goalId);
 
-  // Disable buttons while saving
   document.querySelectorAll('.log-btn').forEach(b => b.disabled = true);
+
+  const prevEntry = logs[goalId]?.[date];
 
   const { error } = await db.from('logs').upsert(
     { goal_id: goalId, date, success: value, logged_by: name, user_id: currentUser.id, updated_at: new Date().toISOString() },
@@ -129,6 +189,27 @@ async function log(goalId, value) {
     console.error(error);
     showAlert('Failed to save. Please try again.');
   } else {
+    if (wallet && goal) {
+      const prevSuccess = prevEntry?.success;
+      const wasLogged = prevEntry !== undefined;
+      let starChange = 0;
+      if (!wasLogged) {
+        starChange = value === true ? 1 : -0.5;
+      } else if (prevSuccess !== value) {
+        const prevChange = prevSuccess === true ? 1 : -0.5;
+        const newChange = value === true ? 1 : -0.5;
+        starChange = newChange - prevChange;
+      }
+      if (starChange !== 0) {
+        const newWalletBal = Math.max(0, wallet.balance + starChange);
+        const newGoalBal = Math.max(0, (goal.star_balance || 0) + starChange);
+        await db.from('wallets').update({ balance: newWalletBal }).eq('user_id', currentUser.id);
+        await db.from('goals').update({ star_balance: newGoalBal }).eq('id', goalId);
+        await db.from('star_logs').insert({ user_id: currentUser.id, goal_id: goalId, change: starChange, reason: value === true ? 'success' : 'failure', date });
+        wallet.balance = newWalletBal;
+        goal.star_balance = newGoalBal;
+      }
+    }
     if (!logs[goalId]) logs[goalId] = {};
     logs[goalId][date] = { success: value, logged_by: name };
   }
@@ -239,7 +320,10 @@ function renderToday() {
             <div class="goal-name">${goal.emoji} ${goal.name}</div>
             <div class="goal-desc">${goal.description || ''}</div>
           </div>
-          <div class="streak-badge">🔥 ${streak}</div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+            <div class="streak-badge">🔥 ${streak}</div>
+            ${goal.star_balance != null ? `<div style="font-size:11px;color:var(--gray-400);">⭐ ${Number(goal.star_balance).toFixed(1)}</div>` : ''}
+          </div>
         </div>
         <div class="log-buttons">
           <button class="${yesClass}" onclick="log('${goal.id}', true)">
@@ -529,11 +613,27 @@ async function saveGoal() {
   const schedule = getScheduleValue();
   if (!name) { document.getElementById('input-name').focus(); return; }
 
+  const starAllocation = Math.max(10, parseInt(document.getElementById('input-stars')?.value || '10') || 10);
+  if (wallet && wallet.balance < starAllocation) {
+    showAlert(`Not enough stars in your wallet (⭐ ${Number(wallet.balance).toFixed(1)}). Reduce the allocation or earn more stars.`);
+    return;
+  }
+
   const id = 'goal-' + Date.now();
-  const { error } = await db.from('goals').insert({ id, name, description, emoji, schedule, user_id: currentUser.id });
+  const { error } = await db.from('goals').insert({
+    id, name, description, emoji, schedule, user_id: currentUser.id,
+    star_allocation: starAllocation, star_balance: starAllocation
+  });
   if (error) { alert('Failed to save goal.'); return; }
 
-  goals.push({ id, name, description, emoji, schedule });
+  if (wallet) {
+    const newBal = wallet.balance - starAllocation;
+    await db.from('wallets').update({ balance: newBal }).eq('user_id', currentUser.id);
+    await db.from('star_logs').insert({ user_id: currentUser.id, goal_id: id, change: -starAllocation, reason: 'allocation', date: todayKey() });
+    wallet.balance = newBal;
+  }
+
+  goals.push({ id, name, description, emoji, schedule, star_allocation: starAllocation, star_balance: starAllocation });
   selectedGoalId = id;
   closeModalDirect();
   renderStatsPage();
@@ -735,7 +835,9 @@ async function init() {
   await loadProfile();
   await loadGoals();
   await loadLogs();
+  await loadWallet();
   await autoFillMissed();
+  await processMissedCheckins();
 
   // Set avatar display name
   const displayName = userProfile?.display_name || currentUser?.user_metadata?.name || currentUser?.email || '?';
@@ -1219,11 +1321,17 @@ async function saveEatFeedback(date) {
 function openProfileMenu() {
   const displayName = userProfile?.display_name || currentUser?.user_metadata?.name || 'Account';
   const email = currentUser?.email || '';
+  const walletHtml = wallet != null ? `
+    <div style="text-align:center;background:var(--gray-50);border-radius:var(--radius-md);padding:14px;margin-bottom:16px;">
+      <div style="font-size:28px;font-weight:700;color:var(--gray-900);">⭐ ${Number(wallet.balance).toFixed(1)}</div>
+      <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">star wallet balance</div>
+    </div>` : '';
   const overlay = document.getElementById('modal-overlay');
   overlay.innerHTML = `
     <div class="modal">
       <div class="modal-title" style="text-align:center;">${displayName}</div>
-      <div style="text-align:center;color:var(--gray-400);font-size:13px;margin-bottom:20px;">${email}</div>
+      <div style="text-align:center;color:var(--gray-400);font-size:13px;margin-bottom:16px;">${email}</div>
+      ${walletHtml}
       <button class="btn-primary" style="width:100%;margin-bottom:10px;" onclick="openEditProfile()">Edit name</button>
       <button class="btn-secondary" style="width:100%;" onclick="signOutFromModal()">Sign out</button>
     </div>`;
@@ -1274,6 +1382,9 @@ async function signOutFromModal() {
 function closeMealModal() {
   const overlay = document.getElementById('modal-overlay');
   overlay.classList.remove('open');
+  const walletInfo = wallet != null
+    ? `<span style="font-size:12px;color:var(--gray-400);">Wallet: ⭐ ${Number(wallet.balance).toFixed(1)}</span>`
+    : '';
   overlay.innerHTML = `
     <div class="modal">
       <div class="modal-title">New habit</div>
@@ -1281,6 +1392,13 @@ function closeMealModal() {
       <div class="form-group"><label class="form-label">Description</label><input class="form-input" id="input-desc" type="text" placeholder="e.g. Ethan at school by 8:45 AM" maxlength="60"/></div>
       <div class="form-group"><label class="form-label">Icon (emoji)</label><input class="form-input" id="input-emoji" type="text" placeholder="🎯" maxlength="4" style="font-size:22px;text-align:center;"/></div>
       <div class="form-group"><label class="form-label">Schedule</label>${schedulePickerHTML()}</div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>Star allocation <span style="font-weight:400;color:var(--gray-400);">(min 10)</span></span>
+          ${walletInfo}
+        </label>
+        <input class="form-input" id="input-stars" type="number" value="10" min="10" step="1" placeholder="10"/>
+      </div>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeModalDirect()">Cancel</button>
         <button class="btn-primary" onclick="saveGoal()">Add habit</button>
