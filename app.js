@@ -1035,11 +1035,13 @@ function openMealPicker(date, type) {
   const dayName = new Date(date + 'T12:00:00').toLocaleDateString('en-US', {weekday: 'short'});
 
   const noRecipeOpt = `<option value="">— No recipe —</option>`;
-  const options = noRecipeOpt + recipes.map(r =>
-    `<option value="${r.id}" ${meal.recipe_id === r.id ? 'selected' : ''}>
-      ${r.name} (${ratingShort(r)}) · ${r.prep_time_minutes}min
-    </option>`
-  ).join('');
+  const tagged = recipes.filter(r => (r.meal_types||['lunch']).includes(type));
+  const untagged = recipes.filter(r => !(r.meal_types||['lunch']).includes(type));
+  const recipeOpt = r => `<option value="${r.id}" ${meal.recipe_id === r.id ? 'selected' : ''}>${r.name} (${ratingShort(r)}) · ${r.prep_time_minutes}min</option>`;
+  const options = noRecipeOpt
+    + tagged.map(recipeOpt).join('')
+    + (untagged.length && tagged.length ? `<option disabled>─── other recipes ───</option>` : '')
+    + untagged.map(recipeOpt).join('');
 
   const pantryOptions = pantryItems.map(p =>
     `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px;">
@@ -1424,6 +1426,7 @@ function renderRecipes(container) {
         <div style="flex:1;min-width:0;">
           <div class="recipe-card-name">${r.name}${r.source_url ? ` <a href="${r.source_url}" target="_blank" style="font-size:12px;color:var(--green);text-decoration:none;margin-left:4px;" onclick="event.stopPropagation()">🔗</a>` : ''}</div>
           <div class="recipe-card-meta">⏱ ${r.prep_time_minutes} min · ${ratingDisplay(r)}</div>
+          ${(r.meal_types||[]).length ? `<div style="margin-top:4px;">${(r.meal_types).map(t=>`<span class="meal-type-tag">${t}</span>`).join('')}</div>` : ''}
         </div>
         <div style="display:flex;gap:2px;align-items:center;">
           <button onclick="openEditRecipe('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);padding:4px;" title="Edit">
@@ -1651,6 +1654,13 @@ function openAddRecipe(prefill = {}) {
         <input type="hidden" id="r-rating" value=""/>
       </div>
       <div class="form-group">
+        <label class="form-label">Good for</label>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          ${['breakfast','lunch','dinner'].map(t => `
+            <button type="button" class="meal-type-chip${(prefill.meal_types||['lunch']).includes(t) ? ' active' : ''}" data-mealtype="${t}" onclick="toggleMealTypeChip(this)">${t.charAt(0).toUpperCase()+t.slice(1)}</button>`).join('')}
+        </div>
+      </div>
+      <div class="form-group">
         <label class="form-label">Nutrition coverage</label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
           ${['protein','carb','fat','fiber','fruit'].map(t => `
@@ -1689,6 +1699,14 @@ function previewPhoto(input) {
     `<img src="${url}" style="width:100%;height:100%;object-fit:cover;">`;
 }
 
+function toggleMealTypeChip(btn) {
+  btn.classList.toggle('active');
+}
+
+function getSelectedMealTypes() {
+  return [...document.querySelectorAll('.meal-type-chip.active')].map(b => b.dataset.mealtype);
+}
+
 function setStars(val) {
   const isEmpty = val === null || val === undefined || val === '';
   const isDislike = val === 0;
@@ -1709,6 +1727,7 @@ async function saveRecipeWithAI() {
   const ratingRaw = document.getElementById('r-rating').value;
   const rating = ratingRaw === '' ? null : parseInt(ratingRaw);
   const nutritionTags = [...document.querySelectorAll('.r-nutrition:checked')].map(el => el.value);
+  const mealTypes = getSelectedMealTypes();
   const desc = document.getElementById('r-desc').value.trim();
   const sourceUrl = document.getElementById('r-source-url')?.value.trim() || null;
   if (!name) return;
@@ -1749,11 +1768,11 @@ async function saveRecipeWithAI() {
   const { error } = await db.from('recipes').insert({
     id, name, ingredients, prep_steps: prepSteps,
     prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags,
-    photo_url: photoUrl, source_url: sourceUrl
+    meal_types: mealTypes, photo_url: photoUrl, source_url: sourceUrl
   });
 
   if (!error) {
-    recipes.push({ id, name, ingredients, prep_steps: prepSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, photo_url: photoUrl, source_url: sourceUrl });
+    recipes.push({ id, name, ingredients, prep_steps: prepSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, meal_types: mealTypes, photo_url: photoUrl, source_url: sourceUrl });
     closeMealModal();
     renderMealsPage();
   } else {
@@ -1805,6 +1824,13 @@ function openEditRecipe(id) {
         <input type="hidden" id="r-rating" value="${r.ethan_rating ?? ''}"/>
       </div>
       <div class="form-group">
+        <label class="form-label">Good for</label>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          ${['breakfast','lunch','dinner'].map(t => `
+            <button type="button" class="meal-type-chip${(r.meal_types||['lunch']).includes(t) ? ' active' : ''}" data-mealtype="${t}" onclick="toggleMealTypeChip(this)">${t.charAt(0).toUpperCase()+t.slice(1)}</button>`).join('')}
+        </div>
+      </div>
+      <div class="form-group">
         <label class="form-label">Nutrition coverage</label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
           ${['protein','carb','fat','fiber','fruit'].map(t => `
@@ -1843,6 +1869,7 @@ async function saveEditRecipe(id) {
   const ratingRaw = document.getElementById('r-rating').value;
   const rating = ratingRaw === '' ? null : parseInt(ratingRaw);
   const nutritionTags = [...document.querySelectorAll('.r-nutrition:checked')].map(el => el.value);
+  const mealTypes = getSelectedMealTypes();
   const desc = document.getElementById('r-desc').value.trim();
   if (!name) return;
 
@@ -1881,12 +1908,12 @@ async function saveEditRecipe(id) {
   const { error } = await db.from('recipes').update({
     name, ingredients, prep_steps: prepSteps,
     prep_time_minutes: prepTime, ethan_rating: rating,
-    nutrition_tags: nutritionTags, photo_url: photoUrl
+    nutrition_tags: nutritionTags, meal_types: mealTypes, photo_url: photoUrl
   }).eq('id', id);
 
   if (!error) {
     const idx = recipes.findIndex(r => r.id === id);
-    if (idx !== -1) recipes[idx] = { ...recipes[idx], name, ingredients, prep_steps: prepSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, photo_url: photoUrl };
+    if (idx !== -1) recipes[idx] = { ...recipes[idx], name, ingredients, prep_steps: prepSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, meal_types: mealTypes, photo_url: photoUrl };
     closeMealModal();
     renderMealsPage();
   } else {
