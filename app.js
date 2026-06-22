@@ -1923,15 +1923,21 @@ async function saveRecipeWithAI() {
     }
   }
 
-  const { error } = await db.from('recipes').insert({
-    id, name, ingredients, prep_steps: prepSteps, instructions,
-    instruction_steps: instructionSteps,
-    prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags,
-    meal_types: mealTypes, photo_url: photoUrl, source_url: sourceUrl
-  });
+  const fullRow = { id, name, ingredients, prep_steps: prepSteps, instructions,
+    instruction_steps: instructionSteps, prep_time_minutes: prepTime,
+    ethan_rating: rating, nutrition_tags: nutritionTags,
+    meal_types: mealTypes, photo_url: photoUrl, source_url: sourceUrl };
+  let { error } = await db.from('recipes').insert(fullRow);
+  if (error?.code === 'PGRST204') {
+    ({ error } = await db.from('recipes').insert({
+      id, name, ingredients, prep_steps: prepSteps,
+      prep_time_minutes: prepTime, ethan_rating: rating,
+      nutrition_tags: nutritionTags, photo_url: photoUrl
+    }));
+  }
 
   if (!error) {
-    recipes.push({ id, name, ingredients, prep_steps: prepSteps, instructions, instruction_steps: instructionSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, meal_types: mealTypes, photo_url: photoUrl, source_url: sourceUrl });
+    recipes.push(fullRow);
     closeMealModal();
     renderMealsPage();
   } else {
@@ -2071,17 +2077,25 @@ async function saveEditRecipe(id) {
     }
   }
 
-  const { error } = await db.from('recipes').update({
+  const fullData = {
     name, ingredients, prep_steps: prepSteps,
     instructions: instructions || r.instructions || null,
     instruction_steps: instructionSteps,
     prep_time_minutes: prepTime, ethan_rating: rating,
     nutrition_tags: nutritionTags, meal_types: mealTypes, photo_url: photoUrl
-  }).eq('id', id);
+  };
+  let { error } = await db.from('recipes').update(fullData).eq('id', id);
+  if (error?.code === 'PGRST204') {
+    ({ error } = await db.from('recipes').update({
+      name, ingredients, prep_steps: prepSteps,
+      prep_time_minutes: prepTime, ethan_rating: rating,
+      nutrition_tags: nutritionTags, photo_url: photoUrl
+    }).eq('id', id));
+  }
 
   if (!error) {
     const idx = recipes.findIndex(r => r.id === id);
-    if (idx !== -1) recipes[idx] = { ...recipes[idx], name, ingredients, prep_steps: prepSteps, instructions: instructions || r.instructions, instruction_steps: instructionSteps, prep_time_minutes: prepTime, ethan_rating: rating, nutrition_tags: nutritionTags, meal_types: mealTypes, photo_url: photoUrl };
+    if (idx !== -1) recipes[idx] = { ...recipes[idx], ...fullData };
     closeMealModal();
     renderMealsPage();
   } else {
