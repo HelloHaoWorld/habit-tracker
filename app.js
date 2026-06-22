@@ -894,8 +894,9 @@ async function loadMealPlan() {
   if (!error) {
     mealPlan = {};
     for (const row of data) {
-      const type = row.meal_type || 'lunch';
-      mealPlan[row.date + '_' + type] = row;
+      // meal_type column may not exist yet; derive from ID "meal-YYYY-MM-DD-type"
+      const type = row.meal_type || row.id?.split('-').pop() || 'lunch';
+      mealPlan[row.date + '_' + type] = { ...row, meal_type: type };
     }
   }
 }
@@ -1124,7 +1125,7 @@ async function autoSuggestWeek() {
 
       const id = `meal-${meal.date}-lunch`;
       const { error: mealErr } = await db.from('meals').upsert(
-        { id, date: meal.date, meal_type: 'lunch', recipe_id: recipe.id, confirmed: false },
+        { id, date: meal.date, recipe_id: recipe.id, confirmed: false },
         { onConflict: 'id' }
       );
       if (!mealErr) mealPlan[meal.date + '_lunch'] = { id, date: meal.date, meal_type: 'lunch', recipe_id: recipe.id, confirmed: false };
@@ -1210,7 +1211,7 @@ async function saveMealPick(date, type) {
   const saveBtn = document.getElementById('meal-save-btn');
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
   const { error } = await db.from('meals').upsert(
-    { id, date, meal_type: type, recipe_id: recipeId, pantry_item_ids: checkedPantry, confirmed: true },
+    { id, date, recipe_id: recipeId, pantry_item_ids: checkedPantry, confirmed: true },
     { onConflict: 'id' }
   );
   if (error) {
