@@ -876,6 +876,7 @@ let recipeSort = 'name'; // 'name' | 'rating' | 'time'
 let recipeFilters = new Set(); // nutrition tag filters
 let collapsedWeeks = new Set(JSON.parse(localStorage.getItem('collapsedWeeks') || '[]'));
 let plannerWeeks = parseInt(localStorage.getItem('plannerWeeks') || '1', 10);
+let mealDragSource = null; // { date, type } of cell being dragged
 
 // ─── Meals data loading ───────────────────────────────────────────────────────
 
@@ -995,6 +996,90 @@ function getSuggestForNutrient(nutrient) {
   return { protein: 'egg or cheese', carb: 'crackers or rice', fiber: 'cucumber or carrot', fat: 'nuts or avocado' }[nutrient] || nutrient;
 }
 
+function startMealDrag(event, date, type) {
+  mealDragSource = { date, type };
+  event.dataTransfer.effectAllowed = 'copyMove';
+  // Mark source cell after paint so it's not dimmed in the drag ghost
+  setTimeout(() => {
+    document.querySelectorAll('.mg-cell').forEach(el => {
+      if (el.dataset.date === date && el.dataset.type === type) el.classList.add('drag-source');
+    });
+  }, 0);
+}
+
+function endMealDrag() {
+  mealDragSource = null;
+  document.querySelectorAll('.mg-cell.drag-source, .mg-cell.drag-over').forEach(el => {
+    el.classList.remove('drag-source', 'drag-over');
+  });
+}
+
+function allowMealDrop(event) {
+  if (!mealDragSource) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  event.currentTarget.classList.add('drag-over');
+}
+
+function leaveMealDrop(event) {
+  event.currentTarget.classList.remove('drag-over');
+}
+
+function dropMeal(event, targetDate, targetType) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag-over');
+  if (!mealDragSource) return;
+  const { date: srcDate, type: srcType } = mealDragSource;
+  mealDragSource = null;
+  document.querySelectorAll('.mg-cell.drag-source').forEach(el => el.classList.remove('drag-source'));
+  if (srcDate === targetDate && srcType === targetType) return;
+  const srcMeal = mealPlan[`${srcDate}_${srcType}`];
+  if (!srcMeal) return;
+  showMealDropDialog(srcDate, srcType, targetDate, targetType);
+}
+
+function showMealDropDialog(srcDate, srcType, targetDate, targetType) {
+  const srcMeal = mealPlan[`${srcDate}_${srcType}`];
+  const recipe = recipes.find(r => r.id === srcMeal?.recipe_id);
+  const fmt = (d, t) => `${t.charAt(0).toUpperCase()+t.slice(1)}, ${formatPlannerDate(d)}`;
+  const el = document.getElementById('dialog-overlay');
+  el.innerHTML = `
+    <div class="modal">
+      <div style="font-size:15px;font-weight:600;color:var(--gray-900);margin-bottom:4px;">${recipe?.name || 'Meal'}</div>
+      <div style="font-size:13px;color:var(--gray-500);margin-bottom:20px;">${fmt(srcDate,srcType)} → ${fmt(targetDate,targetType)}</div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeDialog()">Cancel</button>
+        <button class="btn-secondary" onclick="closeDialog();executeMealDrop('${srcDate}','${srcType}','${targetDate}','${targetType}',false)">Copy</button>
+        <button class="btn-primary" onclick="closeDialog();executeMealDrop('${srcDate}','${srcType}','${targetDate}','${targetType}',true)">Move</button>
+      </div>
+    </div>`;
+  el.classList.add('open');
+}
+
+async function executeMealDrop(srcDate, srcType, targetDate, targetType, isMove) {
+  const srcKey = `${srcDate}_${srcType}`;
+  const srcMeal = mealPlan[srcKey];
+  if (!srcMeal) return;
+
+  const targetId = `meal-${targetDate}-${targetType}`;
+  const targetKey = `${targetDate}_${targetType}`;
+
+  const { error } = await db.from('meals').upsert(
+    { id: targetId, date: targetDate, meal_type: targetType, recipe_id: srcMeal.recipe_id, pantry_item_ids: srcMeal.pantry_item_ids || [], confirmed: true },
+    { onConflict: 'id' }
+  );
+  if (error) { showAlert('Could not save meal: ' + error.message); return; }
+
+  mealPlan[targetKey] = { id: targetId, date: targetDate, meal_type: targetType, recipe_id: srcMeal.recipe_id, pantry_item_ids: srcMeal.pantry_item_ids || [], confirmed: true };
+
+  if (isMove) {
+    await db.from('meals').delete().eq('id', srcMeal.id);
+    delete mealPlan[srcKey];
+  }
+
+  renderMealsPage();
+}
+
 function renderPlanner(container) {
   const weekDates = getWeekDates(plannerWeeks);
   const today = todayKey();
@@ -1041,7 +1126,13 @@ function renderPlanner(container) {
       }
 
       const onClick = isPast ? '' : `onclick="openMealPicker('${date}','${type}')"`;
-      return `<div class="mg-cell${isPast ? ' past' : ''}${isToday ? ' is-today' : ''}" ${onClick}>${inner}</div>`;
+      const dragAttrs = recipe && !isPast
+        ? `draggable="true" ondragstart="startMealDrag(event,'${date}','${type}')" ondragend="endMealDrag()"`
+        : '';
+      const dropAttrs = !isPast
+        ? `ondragover="allowMealDrop(event)" ondragleave="leaveMealDrop(event)" ondrop="dropMeal(event,'${date}','${type}')"`
+        : '';
+      return `<div class="mg-cell${isPast ? ' past' : ''}${isToday ? ' is-today' : ''}" data-date="${date}" data-type="${type}" ${onClick} ${dragAttrs} ${dropAttrs}>${inner}</div>`;
     }).join('');
 
     return `<div class="mg-row-label">${mealTypeLabels[ti]}</div>${cells}`;

@@ -184,6 +184,9 @@
     .mg-cell:not(.past):hover { background:var(--green-light); }
     .mg-cell.past { cursor:default; }
     .mg-cell.is-today { background:#f0faf6; }
+    .mg-cell.drag-source { opacity:0.4; }
+    .mg-cell.drag-over { background:#d1f0e6 !important; outline:2px dashed var(--green); outline-offset:-2px; }
+    .mg-cell[draggable="true"] .mg-cell-recipe { cursor:grab; }
     .mg-cell-recipe { font-size:11px; font-weight:600; color:var(--gray-900); line-height:1.3; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
     .mg-cell.past .mg-cell-recipe { color:var(--gray-400); }
     .mg-cell-add { font-size:20px; color:var(--gray-300); text-align:center; padding-top:14px; }
