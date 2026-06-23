@@ -881,6 +881,7 @@ let currentMealsTab = 'planner';
 let weekGroceryList = null;
 let recipeSort = 'name'; // 'name' | 'rating' | 'time'
 let recipeFilters = new Set(); // nutrition tag filters
+let recipeMealTypeFilters = new Set(); // meal type filters (breakfast/lunch/dinner)
 let collapsedWeeks = new Set(JSON.parse(localStorage.getItem('collapsedWeeks') || '[]'));
 let plannerWeeks = parseInt(localStorage.getItem('plannerWeeks') || '1', 10);
 let mealDragSource = null; // { date, type } of cell being dragged
@@ -1638,6 +1639,12 @@ function toggleRecipeFilter(tag) {
   renderMealsPage();
 }
 
+function toggleRecipeMealTypeFilter(type) {
+  if (recipeMealTypeFilters.has(type)) recipeMealTypeFilters.delete(type);
+  else recipeMealTypeFilters.add(type);
+  renderMealsPage();
+}
+
 function renderRecipes(container) {
   // Sort
   let sorted = [...recipes];
@@ -1653,10 +1660,16 @@ function renderRecipes(container) {
     sorted.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  // Filter by nutrition tags (all selected tags must be present)
+  // Filter by nutrition tags (all selected must be present)
   if (recipeFilters.size > 0) {
     sorted = sorted.filter(r =>
       [...recipeFilters].every(tag => (r.nutrition_tags || []).includes(tag))
+    );
+  }
+  // Filter by meal type (any selected type matches)
+  if (recipeMealTypeFilters.size > 0) {
+    sorted = sorted.filter(r =>
+      [...recipeMealTypeFilters].some(t => (r.meal_types || ['lunch']).includes(t))
     );
   }
 
@@ -1665,6 +1678,11 @@ function renderRecipes(container) {
 
   const filterChip = (tag) =>
     `<button onclick="toggleRecipeFilter('${tag}')" class="recipe-filter-chip${recipeFilters.has(tag) ? ' active' : ''}">${tag}</button>`;
+
+  const mealTypeChip = (type) =>
+    `<button onclick="toggleRecipeMealTypeFilter('${type}')" class="recipe-filter-chip${recipeMealTypeFilters.has(type) ? ' active' : ''}">${type.charAt(0).toUpperCase() + type.slice(1)}</button>`;
+
+  const anyFilter = recipeFilters.size > 0 || recipeMealTypeFilters.size > 0;
 
   const controls = `
     <div style="margin-bottom:12px;">
@@ -1676,10 +1694,14 @@ function renderRecipes(container) {
           ${sortBtn('time', '⏱ Time')}
         </div>
       </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+        <span style="font-size:11px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;">Meal</span>
+        ${['breakfast','lunch','dinner'].map(mealTypeChip).join('')}
+      </div>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-        <span style="font-size:11px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;">Filter</span>
+        <span style="font-size:11px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;">Nutrition</span>
         ${['protein','carb','fat','fiber','fruit'].map(filterChip).join('')}
-        ${recipeFilters.size > 0 ? `<button onclick="recipeFilters.clear();renderMealsPage();" style="background:none;border:none;font-size:12px;color:var(--gray-400);cursor:pointer;padding:2px 4px;">✕ Clear</button>` : ''}
+        ${anyFilter ? `<button onclick="recipeFilters.clear();recipeMealTypeFilters.clear();renderMealsPage();" style="background:none;border:none;font-size:12px;color:var(--gray-400);cursor:pointer;padding:2px 4px;">✕ Clear all</button>` : ''}
       </div>
     </div>`;
 
