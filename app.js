@@ -1071,10 +1071,16 @@ async function executeMealDrop(srcDate, srcType, targetDate, targetType, isMove)
   const targetId = `meal-${targetDate}-${targetType}`;
   const targetKey = `${targetDate}_${targetType}`;
 
-  const { error } = await db.from('meals').upsert(
+  let { error } = await db.from('meals').upsert(
     { id: targetId, date: targetDate, meal_type: targetType, recipe_id: srcMeal.recipe_id, recipe_ids: srcMeal.recipe_ids || [], pantry_item_ids: srcMeal.pantry_item_ids || [], confirmed: true },
     { onConflict: 'id' }
   );
+  if (error?.code === 'PGRST204') {
+    ({ error } = await db.from('meals').upsert(
+      { id: targetId, date: targetDate, meal_type: targetType, recipe_id: srcMeal.recipe_id, pantry_item_ids: srcMeal.pantry_item_ids || [], confirmed: true },
+      { onConflict: 'id' }
+    ));
+  }
   if (error) { showAlert('Could not save meal: ' + error.message); return; }
 
   mealPlan[targetKey] = { id: targetId, date: targetDate, meal_type: targetType, recipe_id: srcMeal.recipe_id, recipe_ids: srcMeal.recipe_ids || [], pantry_item_ids: srcMeal.pantry_item_ids || [], confirmed: true };
