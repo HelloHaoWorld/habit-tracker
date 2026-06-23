@@ -183,7 +183,8 @@
     .mg-row-label { background:var(--gray-50); display:flex; align-items:center; justify-content:center; padding:6px 3px; font-size:9px; font-weight:700; color:var(--gray-500); text-transform:uppercase; letter-spacing:0.5px; text-align:center; }
     .mg-cell { background:white; padding:7px 6px; cursor:pointer; min-height:68px; transition:background 0.1s; }
     .mg-cell:not(.past):hover { background:var(--green-light); }
-    .mg-cell.past { cursor:default; }
+    .mg-cell.past { cursor:pointer; }
+    .mg-cell.past:hover { background:var(--gray-100); }
     .mg-cell.is-today { background:#f0faf6; }
     .mg-cell.drag-source { opacity:0.4; }
     .mg-cell.drag-over { background:#d1f0e6 !important; outline:2px dashed var(--green); outline-offset:-2px; }

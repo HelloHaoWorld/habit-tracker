@@ -1132,13 +1132,11 @@ function renderPlanner(container) {
         inner = `<div class="mg-cell-add">+</div>`;
       }
 
-      const onClick = isPast ? '' : `onclick="openMealPicker('${date}','${type}')"`;
-      const dragAttrs = recipe && !isPast
+      const onClick = `onclick="openMealPicker('${date}','${type}')"`;
+      const dragAttrs = recipe
         ? `draggable="true" ondragstart="startMealDrag(event,'${date}','${type}')" ondragend="endMealDrag()"`
         : '';
-      const dropAttrs = !isPast
-        ? `ondragover="allowMealDrop(event)" ondragleave="leaveMealDrop(event)" ondrop="dropMeal(event,'${date}','${type}')"`
-        : '';
+      const dropAttrs = `ondragover="allowMealDrop(event)" ondragleave="leaveMealDrop(event)" ondrop="dropMeal(event,'${date}','${type}')"`;
       return `<div class="mg-cell${isPast ? ' past' : ''}${isToday ? ' is-today' : ''}" data-date="${date}" data-type="${type}" ${onClick} ${dragAttrs} ${dropAttrs}>${inner}</div>`;
     }).join('');
 
