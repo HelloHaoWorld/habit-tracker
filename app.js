@@ -1132,7 +1132,7 @@ function renderPlanner(container) {
         let extra = '';
         if (type === 'lunch') {
           const covered = new Set(getMealNutrition(meal));
-          const ok = covered.has('protein') && covered.has('carb') && covered.has('fiber');
+          const ok = covered.has('protein') && covered.has('carb');
           if (isPast) {
             extra = `<button class="bento-question" style="font-size:10px;padding:1px 5px;margin-top:3px;" onclick="event.stopPropagation();openEatFeedback('${date}')">?</button>`;
           } else {
