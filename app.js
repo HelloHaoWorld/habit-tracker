@@ -882,6 +882,7 @@ let weekGroceryList = null;
 let recipeSort = 'name'; // 'name' | 'rating' | 'time'
 let recipeFilters = new Set(); // nutrition tag filters
 let recipeMealTypeFilters = new Set(); // meal type filters (breakfast/lunch/dinner)
+let pantryFilters = new Set(); // pantry category + nutrition filters
 let collapsedWeeks = new Set(JSON.parse(localStorage.getItem('collapsedWeeks') || '[]'));
 let plannerWeeks = parseInt(localStorage.getItem('plannerWeeks') || '1', 10);
 let mealDragSource = null; // { date, type } of cell being dragged
@@ -1645,6 +1646,12 @@ function toggleRecipeMealTypeFilter(type) {
   renderMealsPage();
 }
 
+function togglePantryFilter(val) {
+  if (pantryFilters.has(val)) pantryFilters.delete(val);
+  else pantryFilters.add(val);
+  renderMealsPage();
+}
+
 function renderRecipes(container) {
   // Sort
   let sorted = [...recipes];
@@ -2295,15 +2302,40 @@ function pantryItemRow(p) {
 }
 
 function renderPantry(container) {
+  const pChip = (val, label) =>
+    `<button onclick="togglePantryFilter('${val}')" class="recipe-filter-chip${pantryFilters.has(val) ? ' active' : ''}">${label}</button>`;
+
+  const filterBar = `
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+        <span style="font-size:11px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;">Category</span>
+        ${PANTRY_CATEGORIES.map(c => pChip(c, `${PANTRY_CATEGORY_ICONS[c]} ${c}`)).join('')}
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <span style="font-size:11px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;">Nutrition</span>
+        ${['protein','carb','fat','fiber','fruit'].map(t => pChip(t, t)).join('')}
+        ${pantryFilters.size > 0 ? `<button onclick="pantryFilters.clear();renderMealsPage();" style="background:none;border:none;font-size:12px;color:var(--gray-400);cursor:pointer;padding:2px 4px;">✕ Clear</button>` : ''}
+      </div>
+    </div>`;
+
   if (!pantryItems.length) {
     container.innerHTML = `
       <button class="action-btn" onclick="openAddPantryItem()">+ Add pantry item</button>
+      ${filterBar}
       <div class="empty"><div class="empty-icon">🧺</div>No pantry items yet</div>`;
     return;
   }
 
+  // Separate active category filters from nutrition filters
+  const activeCatFilters = [...pantryFilters].filter(v => PANTRY_CATEGORIES.includes(v));
+  const activeNutFilters = [...pantryFilters].filter(v => !PANTRY_CATEGORIES.includes(v));
+
+  let filtered = pantryItems;
+  if (activeCatFilters.length) filtered = filtered.filter(p => activeCatFilters.includes(p.category || 'Frozen & Other'));
+  if (activeNutFilters.length) filtered = filtered.filter(p => activeNutFilters.some(t => (p.nutrition_tags || []).includes(t)));
+
   const grouped = {};
-  for (const p of pantryItems) {
+  for (const p of filtered) {
     const cat = p.category || 'Frozen & Other';
     if (!grouped[cat]) grouped[cat] = [];
     grouped[cat].push(p);
@@ -2314,16 +2346,19 @@ function renderPantry(container) {
     ...Object.keys(grouped).filter(c => !PANTRY_CATEGORIES.includes(c) && grouped[c]?.length)
   ];
 
-  const sections = orderedCats.map(cat => `
-    <div style="margin-bottom:20px;">
-      <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;padding:0 2px;">
-        ${PANTRY_CATEGORY_ICONS[cat] || '📦'} ${cat}
-      </div>
-      <div class="goals-list" style="margin:0;">${grouped[cat].map(pantryItemRow).join('')}</div>
-    </div>`).join('');
+  const sections = orderedCats.length
+    ? orderedCats.map(cat => `
+        <div style="margin-bottom:20px;">
+          <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;padding:0 2px;">
+            ${PANTRY_CATEGORY_ICONS[cat] || '📦'} ${cat}
+          </div>
+          <div class="goals-list" style="margin:0;">${grouped[cat].map(pantryItemRow).join('')}</div>
+        </div>`).join('')
+    : '<div class="empty"><div class="empty-icon">🔍</div>No items match these filters</div>';
 
   container.innerHTML = `
     <button class="action-btn" onclick="openAddPantryItem()">+ Add pantry item</button>
+    ${filterBar}
     ${sections}
   `;
 }
