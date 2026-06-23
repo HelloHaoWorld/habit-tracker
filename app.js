@@ -2219,11 +2219,18 @@ function selectMainNutrient(el) {
 
 // ─── Pantry tab ───────────────────────────────────────────────────────────────
 
-function renderPantry(container) {
-  const items = pantryItems.map(p => `
+const PANTRY_CATEGORIES = ['Vegetables', 'Fruits', 'Protein', 'Dairy', 'Grains & Bread', 'Snacks', 'Condiments', 'Frozen & Other'];
+
+const PANTRY_CATEGORY_ICONS = {
+  'Vegetables': '🥦', 'Fruits': '🍎', 'Protein': '🥩', 'Dairy': '🧀',
+  'Grains & Bread': '🍞', 'Snacks': '🍿', 'Condiments': '🫙', 'Frozen & Other': '❄️'
+};
+
+function pantryItemRow(p) {
+  return `
     <div class="goal-item">
       <div class="goal-info">
-        <div class="goal-item-name" style="${nutrientTextColor(p.nutrition_tags) ? `color:${nutrientTextColor(p.nutrition_tags)};font-weight:600;` : ''}">${p.name}</div>
+        <div class="goal-item-name">${p.name}</div>
         <div style="margin-top:4px">${(p.nutrition_tags||[]).map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}</div>
       </div>
       <div style="display:flex;gap:2px;align-items:center;">
@@ -2234,31 +2241,75 @@ function renderPantry(container) {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
         </button>
       </div>
+    </div>`;
+}
+
+function renderPantry(container) {
+  if (!pantryItems.length) {
+    container.innerHTML = `
+      <button class="action-btn" onclick="openAddPantryItem()">+ Add pantry item</button>
+      <div class="empty"><div class="empty-icon">🧺</div>No pantry items yet</div>`;
+    return;
+  }
+
+  const grouped = {};
+  for (const p of pantryItems) {
+    const cat = p.category || 'Frozen & Other';
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(p);
+  }
+
+  const orderedCats = [
+    ...PANTRY_CATEGORIES.filter(c => grouped[c]?.length),
+    ...Object.keys(grouped).filter(c => !PANTRY_CATEGORIES.includes(c) && grouped[c]?.length)
+  ];
+
+  const sections = orderedCats.map(cat => `
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;padding:0 2px;">
+        ${PANTRY_CATEGORY_ICONS[cat] || '📦'} ${cat}
+      </div>
+      <div class="goals-list" style="margin:0;">${grouped[cat].map(pantryItemRow).join('')}</div>
     </div>`).join('');
 
   container.innerHTML = `
     <button class="action-btn" onclick="openAddPantryItem()">+ Add pantry item</button>
-    <div class="goals-list">${items || '<div class="empty"><div class="empty-icon">🧺</div>No pantry items yet</div>'}</div>
+    ${sections}
   `;
+}
+
+function pantryFormFields(name = '', category = '', nutrient = '') {
+  const catOptions = PANTRY_CATEGORIES.map(c =>
+    `<option value="${c}"${c === category ? ' selected' : ''}>${PANTRY_CATEGORY_ICONS[c]} ${c}</option>`
+  ).join('');
+  return `
+    <div class="form-group">
+      <label class="form-label">Item name</label>
+      <input class="form-input" id="p-name" type="text" placeholder="e.g. Apple, Cheese stick" value="${name}"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-input" id="p-category">
+        <option value="">— Select category —</option>
+        ${catOptions}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Main nutrient</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
+        ${['protein','carb','fat','fiber','fruit'].map(t =>
+          `<span class="nutrition-badge ${t} p-nutrient-chip" data-nutrient="${t}" onclick="selectMainNutrient(this)" style="padding:5px 14px;font-size:13px;cursor:pointer;opacity:${t === nutrient ? '1' : '0.35'};">${t}</span>`
+        ).join('')}
+      </div>
+      <input type="hidden" id="p-main-nutrient" value="${nutrient}"/>
+    </div>`;
 }
 
 function openAddPantryItem() {
   document.getElementById('modal-overlay').innerHTML = `
     <div class="modal">
       <div class="modal-title">New pantry item</div>
-      <div class="form-group">
-        <label class="form-label">Item name</label>
-        <input class="form-input" id="p-name" type="text" placeholder="e.g. Apple, Cheese stick"/>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Main nutrient</label>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
-          ${['protein','carb','fat','fiber','fruit'].map(t =>
-            `<span class="nutrition-badge ${t} p-nutrient-chip" data-nutrient="${t}" onclick="selectMainNutrient(this)" style="padding:5px 14px;font-size:13px;cursor:pointer;opacity:0.35;">${t}</span>`
-          ).join('')}
-        </div>
-        <input type="hidden" id="p-main-nutrient" value=""/>
-      </div>
+      ${pantryFormFields()}
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
         <button class="btn-primary" onclick="savePantryItem()">Add item</button>
@@ -2269,13 +2320,17 @@ function openAddPantryItem() {
 
 async function savePantryItem() {
   const name = document.getElementById('p-name').value.trim();
+  const category = document.getElementById('p-category').value || 'Frozen & Other';
   const main = document.getElementById('p-main-nutrient').value;
   const nutritionTags = main ? [main] : [];
   if (!name) return;
   const id = 'pantry-' + Date.now();
-  const { error } = await db.from('pantry_items').insert({ id, name, nutrition_tags: nutritionTags });
+  let { error } = await db.from('pantry_items').insert({ id, name, nutrition_tags: nutritionTags, category });
+  if (error?.code === 'PGRST204') {
+    ({ error } = await db.from('pantry_items').insert({ id, name, nutrition_tags: nutritionTags }));
+  }
   if (!error) {
-    pantryItems.push({ id, name, nutrition_tags: nutritionTags });
+    pantryItems.push({ id, name, nutrition_tags: nutritionTags, category });
     closeMealModal();
     renderMealsPage();
   }
@@ -2288,19 +2343,7 @@ function openEditPantryItem(id) {
   document.getElementById('modal-overlay').innerHTML = `
     <div class="modal">
       <div class="modal-title">Edit pantry item</div>
-      <div class="form-group">
-        <label class="form-label">Item name</label>
-        <input class="form-input" id="p-name" type="text" value="${p.name}" placeholder="e.g. Apple, Cheese stick"/>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Main nutrient</label>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
-          ${['protein','carb','fat','fiber','fruit'].map(t =>
-            `<span class="nutrition-badge ${t} p-nutrient-chip" data-nutrient="${t}" onclick="selectMainNutrient(this)" style="padding:5px 14px;font-size:13px;cursor:pointer;opacity:${t === current ? '1' : '0.35'};">${t}</span>`
-          ).join('')}
-        </div>
-        <input type="hidden" id="p-main-nutrient" value="${current}"/>
-      </div>
+      ${pantryFormFields(p.name, p.category || '', current)}
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
         <button class="btn-primary" onclick="saveEditPantryItem('${id}')">Save</button>
@@ -2311,13 +2354,17 @@ function openEditPantryItem(id) {
 
 async function saveEditPantryItem(id) {
   const name = document.getElementById('p-name').value.trim();
+  const category = document.getElementById('p-category').value || 'Frozen & Other';
   const main = document.getElementById('p-main-nutrient').value;
   const nutritionTags = main ? [main] : [];
   if (!name) return;
-  const { error } = await db.from('pantry_items').update({ name, nutrition_tags: nutritionTags }).eq('id', id);
+  let { error } = await db.from('pantry_items').update({ name, nutrition_tags: nutritionTags, category }).eq('id', id);
+  if (error?.code === 'PGRST204') {
+    ({ error } = await db.from('pantry_items').update({ name, nutrition_tags: nutritionTags }).eq('id', id));
+  }
   if (!error) {
     const idx = pantryItems.findIndex(p => p.id === id);
-    if (idx !== -1) pantryItems[idx] = { ...pantryItems[idx], name, nutrition_tags: nutritionTags };
+    if (idx !== -1) pantryItems[idx] = { ...pantryItems[idx], name, nutrition_tags: nutritionTags, category };
     closeMealModal();
     renderMealsPage();
   }
