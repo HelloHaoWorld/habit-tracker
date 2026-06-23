@@ -2284,19 +2284,14 @@ const PANTRY_CATEGORY_ICONS = {
 };
 
 function pantryItemRow(p) {
+  const badge = (p.nutrition_tags || [])[0];
   return `
-    <div class="goal-item">
-      <div class="goal-info">
-        <div class="goal-item-name">${p.name}</div>
-        <div style="margin-top:4px">${(p.nutrition_tags||[]).map(t => `<span class="nutrition-badge ${t}">${t}</span>`).join('')}</div>
-      </div>
-      <div style="display:flex;gap:2px;align-items:center;">
-        <button onclick="openEditPantryItem('${p.id}')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);padding:6px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        </button>
-        <button onclick="deletePantryItem('${p.id}')" style="background:none;border:none;cursor:pointer;color:var(--gray-400);padding:6px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-        </button>
+    <div class="pantry-chip">
+      ${badge ? `<span class="nutrition-badge ${badge}" style="padding:2px 6px;font-size:11px;">${badge}</span>` : ''}
+      <span>${p.name}</span>
+      <div class="pantry-chip-actions">
+        <button onclick="openEditPantryItem('${p.id}')" title="Edit">✏️</button>
+        <button onclick="deletePantryItem('${p.id}')" title="Delete">✕</button>
       </div>
     </div>`;
 }
@@ -2352,7 +2347,7 @@ function renderPantry(container) {
           <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;padding:0 2px;">
             ${PANTRY_CATEGORY_ICONS[cat] || '📦'} ${cat}
           </div>
-          <div class="goals-list" style="margin:0;">${grouped[cat].map(pantryItemRow).join('')}</div>
+          <div class="pantry-grid">${grouped[cat].map(pantryItemRow).join('')}</div>
         </div>`).join('')
     : '<div class="empty"><div class="empty-icon">🔍</div>No items match these filters</div>';
 

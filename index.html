@@ -105,6 +105,11 @@
 
     /* Goals page */
     .goals-list { display:flex; flex-direction:column; gap:12px; }
+    .pantry-grid { display:flex; flex-wrap:wrap; gap:8px; }
+    .pantry-chip { display:inline-flex; align-items:center; gap:6px; background:white; border:0.5px solid var(--gray-200); border-radius:20px; padding:6px 10px 6px 12px; font-size:13px; font-weight:500; color:var(--gray-900); }
+    .pantry-chip-actions { display:flex; gap:0; margin-left:2px; }
+    .pantry-chip-actions button { background:none; border:none; cursor:pointer; color:var(--gray-300); padding:1px 3px; font-size:13px; line-height:1; border-radius:10px; transition:color 0.1s; }
+    .pantry-chip-actions button:hover { color:var(--gray-600); }
     .goal-item { background:white; border-radius:var(--radius-lg); border:0.5px solid var(--gray-200); padding:16px; display:flex; align-items:center; gap:12px; }
     .goal-icon { width:40px; height:40px; border-radius:10px; background:var(--green-light); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
     .goal-info { flex:1; min-width:0; }
