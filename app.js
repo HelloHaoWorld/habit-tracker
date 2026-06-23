@@ -49,6 +49,12 @@ function dateKey(date) {
   return `${y}-${m}-${d}`;
 }
 
+function fmtStars(val) {
+  if (val == null) return null;
+  const n = Number(val);
+  return n % 1 === 0 ? String(n) : n.toFixed(1);
+}
+
 function isApplicableDay(goal, dateStr) {
   const schedule = goal?.schedule || 'daily';
   if (schedule === 'daily') return true;
@@ -322,7 +328,7 @@ function renderToday() {
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
             <div class="streak-badge">🔥 ${streak}</div>
-            ${goal.star_balance != null ? `<div style="font-size:11px;color:var(--gray-400);">⭐ ${Number(goal.star_balance).toFixed(1)}</div>` : ''}
+            ${goal.star_allocation != null ? `<div class="star-badge">⭐ ${fmtStars(goal.star_balance ?? 0)}</div>` : ''}
           </div>
         </div>
         <div class="log-buttons">
@@ -351,6 +357,7 @@ function renderHabitPicker() {
       ${goals.map(g => `
         <div class="goal-picker-row${g.id === selectedGoalId ? ' active' : ''}" onclick="selectHabit('${g.id}')">
           <span class="goal-picker-label">${g.emoji} ${g.name}</span>
+          ${g.star_allocation != null ? `<span class="star-badge" style="margin-left:auto;margin-right:6px;">⭐ ${fmtStars(g.star_balance ?? 0)}</span>` : ''}
           <button class="goal-picker-edit" onclick="openEditHabit(event,'${g.id}')" title="Edit">✏️</button>
           <button class="goal-picker-delete" onclick="deleteHabitFromStats(event,'${g.id}')" title="Delete">−</button>
         </div>`).join('')}
