@@ -902,9 +902,10 @@ async function loadMealPlan() {
   if (!error) {
     mealPlan = {};
     for (const row of data) {
-      // meal_type column may not exist yet; derive from ID "meal-YYYY-MM-DD-type"
       const type = row.meal_type || row.id?.split('-').pop() || 'lunch';
-      mealPlan[row.date + '_' + type] = { ...row, meal_type: type };
+      // Normalize: back-fill recipe_ids from recipe_id for older rows
+      const recipe_ids = row.recipe_ids?.length ? row.recipe_ids : (row.recipe_id ? [row.recipe_id] : []);
+      mealPlan[row.date + '_' + type] = { ...row, meal_type: type, recipe_ids };
     }
   }
 }
@@ -955,15 +956,14 @@ function switchPlannerWeeks(offset) {
 function getMealNutrition(meal) {
   if (!meal) return [];
   const covered = new Set();
-  const recipe = recipes.find(r => r.id === meal.recipe_id);
-  if (recipe) recipe.nutrition_tags.forEach(t => covered.add(t));
-  (meal.side_recipe_ids || []).forEach(id => {
+  const ids = meal.recipe_ids?.length ? meal.recipe_ids : (meal.recipe_id ? [meal.recipe_id] : []);
+  ids.forEach(id => {
     const r = recipes.find(r => r.id === id);
-    if (r) r.nutrition_tags.forEach(t => covered.add(t));
+    if (r) (r.nutrition_tags || []).forEach(t => covered.add(t));
   });
   (meal.pantry_item_ids || []).forEach(id => {
     const p = pantryItems.find(p => p.id === id);
-    if (p) p.nutrition_tags.forEach(t => covered.add(t));
+    if (p) (p.nutrition_tags || []).forEach(t => covered.add(t));
   });
   return [...covered];
 }
@@ -1072,12 +1072,12 @@ async function executeMealDrop(srcDate, srcType, targetDate, targetType, isMove)
   const targetKey = `${targetDate}_${targetType}`;
 
   const { error } = await db.from('meals').upsert(
-    { id: targetId, date: targetDate, meal_type: targetType, recipe_id: srcMeal.recipe_id, pantry_item_ids: srcMeal.pantry_item_ids || [], confirmed: true },
+    { id: targetId, date: targetDate, meal_type: targetType, recipe_id: srcMeal.recipe_id, recipe_ids: srcMeal.recipe_ids || [], pantry_item_ids: srcMeal.pantry_item_ids || [], confirmed: true },
     { onConflict: 'id' }
   );
   if (error) { showAlert('Could not save meal: ' + error.message); return; }
 
-  mealPlan[targetKey] = { id: targetId, date: targetDate, meal_type: targetType, recipe_id: srcMeal.recipe_id, pantry_item_ids: srcMeal.pantry_item_ids || [], confirmed: true };
+  mealPlan[targetKey] = { id: targetId, date: targetDate, meal_type: targetType, recipe_id: srcMeal.recipe_id, recipe_ids: srcMeal.recipe_ids || [], pantry_item_ids: srcMeal.pantry_item_ids || [], confirmed: true };
 
   if (isMove) {
     await db.from('meals').delete().eq('id', srcMeal.id);
@@ -1113,8 +1113,9 @@ function renderPlanner(container) {
       const isPast = date < today;
       const isToday = date === today;
 
+      const mealRecipes = (meal?.recipe_ids || []).map(id => recipes.find(r => r.id === id)).filter(Boolean);
       let inner;
-      if (recipe) {
+      if (mealRecipes.length) {
         const mealPantryNames = (meal.pantry_item_ids || [])
           .map(id => pantryItems.find(p => p.id === id)?.name).filter(Boolean);
         const pantryHtml = mealPantryNames.length
@@ -1130,7 +1131,10 @@ function renderPlanner(container) {
             extra = `<div style="font-size:10px;margin-top:2px;">${ok ? '👍' : '👎'}</div>`;
           }
         }
-        inner = `<div class="mg-cell-recipe">${recipe.name}</div>${pantryHtml}${extra}`;
+        const recipeLines = mealRecipes.map((r, i) =>
+          `<div class="mg-cell-recipe"${i > 0 ? ' style="opacity:0.7;"' : ''}>${i > 0 ? '+ ' : ''}${r.name}</div>`
+        ).join('');
+        inner = `${recipeLines}${pantryHtml}${extra}`;
       } else if (isPast) {
         inner = `<div class="mg-cell-dash">—</div>`;
       } else {
@@ -1138,7 +1142,7 @@ function renderPlanner(container) {
       }
 
       const onClick = `onclick="openMealPicker('${date}','${type}')"`;
-      const dragAttrs = recipe
+      const dragAttrs = mealRecipes.length
         ? `draggable="true" ondragstart="startMealDrag(event,'${date}','${type}')" ondragend="endMealDrag()"`
         : '';
       const dropAttrs = `ondragover="allowMealDrop(event)" ondragleave="leaveMealDrop(event)" ondrop="dropMeal(event,'${date}','${type}')"`;
@@ -1226,10 +1230,10 @@ async function autoSuggestWeek() {
 
       const id = `meal-${meal.date}-lunch`;
       const { error: mealErr } = await db.from('meals').upsert(
-        { id, date: meal.date, meal_type: 'lunch', recipe_id: recipe.id, confirmed: false },
+        { id, date: meal.date, meal_type: 'lunch', recipe_id: recipe.id, recipe_ids: [recipe.id], confirmed: false },
         { onConflict: 'id' }
       );
-      if (!mealErr) mealPlan[meal.date + '_lunch'] = { id, date: meal.date, meal_type: 'lunch', recipe_id: recipe.id, confirmed: false };
+      if (!mealErr) mealPlan[meal.date + '_lunch'] = { id, date: meal.date, meal_type: 'lunch', recipe_id: recipe.id, recipe_ids: [recipe.id], confirmed: false };
     }
 
     weekGroceryList = data.groceryList || null;
@@ -1247,20 +1251,30 @@ async function autoSuggestWeek() {
 function openMealPicker(date, type) {
   const key = `${date}_${type}`;
   const meal = mealPlan[key] || {};
+  const currentIds = new Set(meal.recipe_ids?.length ? meal.recipe_ids : (meal.recipe_id ? [meal.recipe_id] : []));
   const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
   const [, m, d] = date.split('-').map(Number);
   const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1];
-  const [, , , dayOfWeek] = [0, 0, 0, new Date(date + 'T12:00:00').toLocaleDateString('en-US', {weekday:'short'})];
   const dayName = new Date(date + 'T12:00:00').toLocaleDateString('en-US', {weekday: 'short'});
 
-  const noRecipeOpt = `<option value="">— No recipe —</option>`;
-  const tagged = recipes.filter(r => (r.meal_types||['lunch']).includes(type));
-  const untagged = recipes.filter(r => !(r.meal_types||['lunch']).includes(type));
-  const recipeOpt = r => `<option value="${r.id}" ${meal.recipe_id === r.id ? 'selected' : ''}>${r.name} (${ratingShort(r)}) · ${r.prep_time_minutes}min</option>`;
-  const options = noRecipeOpt
-    + tagged.map(recipeOpt).join('')
-    + (untagged.length && tagged.length ? `<option disabled>─── other recipes ───</option>` : '')
-    + untagged.map(recipeOpt).join('');
+  const tagged = recipes.filter(r => (r.meal_types || ['lunch']).includes(type));
+  const untagged = recipes.filter(r => !(r.meal_types || ['lunch']).includes(type));
+
+  const recipeRow = r => `
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--gray-100);cursor:pointer;">
+      <input type="checkbox" class="meal-recipe-pick" value="${r.id}" ${currentIds.has(r.id) ? 'checked' : ''}
+        style="accent-color:var(--green);width:16px;height:16px;flex-shrink:0;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:500;color:var(--gray-900);">${r.name}</div>
+        <div style="font-size:11px;color:var(--gray-400);">${ratingShort(r)} · ${r.prep_time_minutes}min</div>
+      </div>
+    </label>`;
+
+  const recipeSection = [
+    tagged.map(recipeRow).join(''),
+    (tagged.length && untagged.length) ? `<div style="font-size:10px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.5px;padding:8px 0 2px;">Other recipes</div>` : '',
+    untagged.map(recipeRow).join('')
+  ].join('');
 
   const pantryOptions = pantryItems.map(p =>
     `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px;">
@@ -1276,8 +1290,8 @@ function openMealPicker(date, type) {
     <div class="modal">
       <div class="modal-title">${typeLabel} · ${dayName} ${mon} ${d}</div>
       <div class="form-group">
-        <label class="form-label">Recipe</label>
-        <select class="form-input" id="meal-picker-recipe">${options}</select>
+        <label class="form-label">Recipes <span style="font-weight:400;color:var(--gray-400);">select one or more</span></label>
+        <div style="max-height:220px;overflow-y:auto;margin-top:4px;">${recipeSection || '<div style="color:var(--gray-400);font-size:13px;padding:8px 0;">No recipes yet — add some in the Recipes tab</div>'}</div>
       </div>
       ${pantryItems.length ? `
       <div class="form-group">
@@ -1286,7 +1300,7 @@ function openMealPicker(date, type) {
       </div>` : ''}
       <div class="modal-actions">
         <button class="btn-secondary" onclick="closeMealModal()">Cancel</button>
-        ${meal.recipe_id ? `<button class="btn-danger" style="flex:0.6;" onclick="clearMealPick('${date}','${type}')">Clear</button>` : ''}
+        ${currentIds.size ? `<button class="btn-danger" style="flex:0.6;" onclick="clearMealPick('${date}','${type}')">Clear</button>` : ''}
         <button class="btn-primary" id="meal-save-btn" onclick="saveMealPick('${date}','${type}')">Save</button>
       </div>
     </div>`;
@@ -1304,23 +1318,30 @@ async function clearMealPick(date, type) {
 }
 
 async function saveMealPick(date, type) {
-  const recipeId = document.getElementById('meal-picker-recipe').value;
-  if (!recipeId) { closeMealModal(); return; }
+  const recipeIds = [...document.querySelectorAll('.meal-recipe-pick:checked')].map(el => el.value);
+  if (!recipeIds.length) { closeMealModal(); return; }
   const checkedPantry = [...document.querySelectorAll('#meal-picker-pantry input:checked')].map(el => el.value);
   const id = `meal-${date}-${type}`;
   const key = `${date}_${type}`;
   const saveBtn = document.getElementById('meal-save-btn');
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
-  const { error } = await db.from('meals').upsert(
-    { id, date, meal_type: type, recipe_id: recipeId, pantry_item_ids: checkedPantry, confirmed: true },
+
+  let { error } = await db.from('meals').upsert(
+    { id, date, meal_type: type, recipe_id: recipeIds[0], recipe_ids: recipeIds, pantry_item_ids: checkedPantry, confirmed: true },
     { onConflict: 'id' }
   );
+  if (error?.code === 'PGRST204') {
+    ({ error } = await db.from('meals').upsert(
+      { id, date, meal_type: type, recipe_id: recipeIds[0], pantry_item_ids: checkedPantry, confirmed: true },
+      { onConflict: 'id' }
+    ));
+  }
   if (error) {
     showAlert('Could not save meal: ' + error.message);
     if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
     return;
   }
-  mealPlan[key] = { id, date, meal_type: type, recipe_id: recipeId, pantry_item_ids: checkedPantry, confirmed: true };
+  mealPlan[key] = { id, date, meal_type: type, recipe_id: recipeIds[0], recipe_ids: recipeIds, pantry_item_ids: checkedPantry, confirmed: true };
   closeMealModal();
   renderMealsPage();
 }
@@ -1329,7 +1350,8 @@ async function saveMealPick(date, type) {
 
 function openEatFeedback(date) {
   const meal = mealPlan[date + '_lunch'];
-  const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
+  const recipeId = meal?.recipe_ids?.[0] || meal?.recipe_id;
+  const recipe = recipeId ? recipes.find(r => r.id === recipeId) : null;
   if (!recipe) return;
   const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(date + 'T12:00:00').getDay()];
 
