@@ -1115,6 +1115,11 @@ function renderPlanner(container) {
 
       let inner;
       if (recipe) {
+        const mealPantryNames = (meal.pantry_item_ids || [])
+          .map(id => pantryItems.find(p => p.id === id)?.name).filter(Boolean);
+        const pantryHtml = mealPantryNames.length
+          ? `<div style="font-size:10px;color:var(--gray-400);margin-top:2px;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${mealPantryNames.join(', ')}</div>`
+          : '';
         let extra = '';
         if (type === 'lunch') {
           const covered = new Set(getMealNutrition(meal));
@@ -1125,7 +1130,7 @@ function renderPlanner(container) {
             extra = `<div style="font-size:10px;margin-top:2px;">${ok ? '👍' : '👎'}</div>`;
           }
         }
-        inner = `<div class="mg-cell-recipe">${recipe.name}</div>${extra}`;
+        inner = `<div class="mg-cell-recipe">${recipe.name}</div>${pantryHtml}${extra}`;
       } else if (isPast) {
         inner = `<div class="mg-cell-dash">—</div>`;
       } else {
