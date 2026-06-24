@@ -1379,7 +1379,8 @@ function openEatFeedback(date) {
 
 function showEatAmountPicker(date) {
   const meal = mealPlan[date + '_lunch'];
-  const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
+  const recipeId = meal?.recipe_ids?.[0] || meal?.recipe_id;
+  const recipe = recipeId ? recipes.find(r => r.id === recipeId) : null;
   if (!recipe) return;
 
   const levels = [
@@ -1389,6 +1390,11 @@ function showEatAmountPicker(date) {
     { label: 'Most',    pct: 0.8, emoji: '😊' },
     { label: 'All!',    pct: 1.0, emoji: '🤩' },
   ];
+
+  const currentRating = recipe.ethan_rating;
+  const starsHtml = [1,2,3,4,5].map(n =>
+    `<span class="eat-star" data-val="${n}" onclick="setEatStars(${n})">★</span>`
+  ).join('');
 
   document.getElementById('modal-overlay').innerHTML = `
     <div class="modal">
@@ -1401,41 +1407,60 @@ function showEatAmountPicker(date) {
             <div>${l.label}</div>
           </button>`).join('')}
       </div>
+      <div style="margin-bottom:18px;">
+        <div style="font-size:12px;color:var(--gray-400);margin-bottom:6px;">Ethan's rating</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div id="eat-stars" style="display:flex;gap:2px;font-size:24px;">${starsHtml}</div>
+          <button type="button" class="eat-dislike-btn" onclick="setEatStars(0)">💔</button>
+          <button type="button" class="eat-unsure-btn" onclick="setEatStars(null)">?</button>
+        </div>
+        <input type="hidden" id="r-eat-rating" value="${currentRating ?? ''}"/>
+      </div>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="openEatFeedback('${date}')">← Back</button>
         <button class="btn-primary" id="eat-save-btn" onclick="saveEatFeedback('${date}')" disabled>Save</button>
       </div>
     </div>`;
   document.getElementById('modal-overlay').classList.add('open');
+  setEatStars(currentRating ?? null);
+}
+
+function setEatStars(val) {
+  const isEmpty = val === null || val === undefined || val === '';
+  const isDislike = val === 0;
+  document.getElementById('r-eat-rating').value = isEmpty ? '' : val;
+  document.querySelectorAll('.eat-star').forEach(s => {
+    s.classList.toggle('active', !isEmpty && !isDislike && parseInt(s.dataset.val) <= val);
+  });
+  const dlBtn = document.querySelector('.eat-dislike-btn');
+  if (dlBtn) dlBtn.classList.toggle('active', isDislike);
+  const unsureBtn = document.querySelector('.eat-unsure-btn');
+  if (unsureBtn) unsureBtn.classList.toggle('active', isEmpty);
 }
 
 function selectEatLevel(btn) {
   document.querySelectorAll('.eat-level-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('eat-save-btn').disabled = false;
+  const pct = parseFloat(btn.dataset.pct);
+  const suggested = pct >= 0.8 ? 5 : pct >= 0.5 ? 4 : pct >= 0.2 ? 2 : 0;
+  setEatStars(suggested === 0 ? 0 : suggested);
 }
 
 async function saveEatFeedback(date) {
   const meal = mealPlan[date + '_lunch'];
-  const recipe = meal ? recipes.find(r => r.id === meal.recipe_id) : null;
+  const recipeId = meal?.recipe_ids?.[0] || meal?.recipe_id;
+  const recipe = recipeId ? recipes.find(r => r.id === recipeId) : null;
   if (!recipe) return;
 
   const activeBtn = document.querySelector('.eat-level-btn.active');
   if (!activeBtn) return;
-  const pct = parseFloat(activeBtn.dataset.pct);
 
-  // Calculate new rating (scale: 0=dislike, 1-5=stars, null=unknown)
-  const curr = recipe.ethan_rating;
-  let newRating;
-  if (curr == null || curr === 0) {
-    newRating = pct < 0.2 ? 0 : Math.max(1, Math.round(pct * 5));
-  } else {
-    const delta = pct >= 0.8 ? 1 : pct >= 0.5 ? 0 : pct >= 0.2 ? -1 : -2;
-    newRating = Math.max(0, Math.min(5, curr + delta));
-  }
+  const ratingRaw = document.getElementById('r-eat-rating').value;
+  const newRating = ratingRaw === '' ? null : parseInt(ratingRaw);
 
   const updates = { ethan_rating: newRating };
-  if (newRating < 1) {
+  if (newRating !== null && newRating < 1) {
     const avoidDate = new Date();
     avoidDate.setDate(avoidDate.getDate() + 14);
     updates.avoid_until = dateKey(avoidDate);
